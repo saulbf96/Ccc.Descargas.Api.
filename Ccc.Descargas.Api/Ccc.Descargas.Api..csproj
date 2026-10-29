@@ -15,4 +15,9 @@
     <Folder Include="Controllers\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Ccc.Descargas.Application\Ccc.Descargas.Application.csproj" />
+    <ProjectReference Include="..\Ccc.Descargas.Infrastructure\Ccc.Descargas.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Ccc.Descargas.Domain\Ccc.Descargas.Domain.csproj" />
+  </ItemGroup>
+
 </Project>
