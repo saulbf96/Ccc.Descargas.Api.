@@ -1,0 +1,6 @@
+@Ccc.Descargas.Api__HostAddress = http://localhost:5239
+
+GET {{Ccc.Descargas.Api__HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
