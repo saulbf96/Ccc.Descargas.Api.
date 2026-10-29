@@ -17,6 +17,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(opciones => opciones.SwaggerEndpoint("/openapi/v1.json", "Ccc.Descargas API v1"));
 }
 
 app.UseHttpsRedirection();
