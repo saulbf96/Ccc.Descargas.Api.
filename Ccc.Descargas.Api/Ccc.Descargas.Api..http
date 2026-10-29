@@ -1,6 +1,13 @@
-@Ccc.Descargas.Api__HostAddress = http://localhost:5239
+@HostAddress = http://localhost:5239
 
-GET {{Ccc.Descargas.Api__HostAddress}}/weatherforecast/
+### Ping a las 6 cuentas
+GET {{HostAddress}}/api/cuentas/ping
 Accept: application/json
 
-###
+### Ping a una cuenta
+GET {{HostAddress}}/api/cuentas/2812/ping
+Accept: application/json
+
+### Cuenta que no existe (debe dar 404)
+GET {{HostAddress}}/api/cuentas/9999/ping
+Accept: application/json

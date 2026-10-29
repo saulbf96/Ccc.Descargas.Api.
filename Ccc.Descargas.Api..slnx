@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="Ccc.Descargas.Api/Ccc.Descargas.Api..csproj" />
+  <Project Path="Ccc.Descargas.Application/Ccc.Descargas.Application.csproj" />
+  <Project Path="Ccc.Descargas.Domain/Ccc.Descargas.Domain.csproj" />
+  <Project Path="Ccc.Descargas.Infrastructure/Ccc.Descargas.Infrastructure.csproj" />
 </Solution>
