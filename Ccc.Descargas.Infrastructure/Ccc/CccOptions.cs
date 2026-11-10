@@ -13,6 +13,16 @@ public sealed class CccOptions
     [Range(5, 600)]
     public int TimeoutSegundos { get; init; } = 120;
 
+    /// <summary>
+    /// CCC atiende una sola petición a la vez: si está ocupado responde 400 con code 101
+    /// ("There is another Transaction in Progress"). Se espera y se reintenta.
+    /// </summary>
+    [Range(0, 60)]
+    public int ReintentosOcupado { get; init; } = 10;
+
+    [Range(1, 600)]
+    public int EsperaOcupadoSegundos { get; init; } = 30;
+
     [MinLength(1)]
     public Dictionary<string, CuentaCccOptions> Cuentas { get; init; } = [];
 }

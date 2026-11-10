@@ -15,12 +15,15 @@ internal sealed class CuentaCccRepository(IOptions<CccOptions> options) : ICuent
 {
     public IReadOnlyList<CuentaCcc> ObtenerTodas() =>
         options.Value.Cuentas
-            .Select(par => new CuentaCcc(par.Key, par.Value.Nombre))
+            .Select(par => Crear(par.Key, par.Value))
             .ToList();
 
     public CuentaCcc? ObtenerPorId(string clientId) =>
         options.Value.Cuentas.TryGetValue(clientId, out var cuenta)
-            ? new CuentaCcc(clientId, cuenta.Nombre)
+            ? Crear(clientId, cuenta)
             : null;
+
+    private static CuentaCcc Crear(string clientId, CuentaCccOptions cuenta) =>
+        new(clientId, cuenta.Nombre, new Uri(cuenta.BaseUrl).Host);
 }
 

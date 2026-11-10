@@ -26,3 +26,5 @@ public sealed class PingCuentasService(ICuentaCccRepository cuentas, ICccClient 
 }
 
 
+
+
