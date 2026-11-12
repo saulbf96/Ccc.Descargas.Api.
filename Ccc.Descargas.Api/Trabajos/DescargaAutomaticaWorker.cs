@@ -6,18 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Api.Trabajos;
 
-/// <summary>
-/// Descarga automática casi en tiempo real. Una tarea por CUENTA; las peticiones a CCC se forman en el carril de su
-/// plataforma (CCC atiende una a la vez por plataforma), pero la espera de la BD de una cuenta no frena a las demás.
-/// En cada turno una cuenta:
-///   1. Si ya toca (cada MinutosEntreFotosAgentes): tiempos del día + foto de estatus de sus agentes.
-///   2. Después de HoraCierreDia (1:00): repaso de las llamadas de AYER completas y cierre de sus tiempos.
-///   3. Avanza sus llamadas por tramos desde su marcador hasta "ahora - MargenMinutos", máximo MinutosPorTurno.
-/// El avance vive en la BD: si el IIS se apaga, al volver sigue donde se quedó (sin límite de horas).
-/// La primera vez de una cuenta empieza a las 00:00 de ese día (nunca baja días anteriores).
-/// Correos: en cuanto falla un tramo (máximo uno por hora y cuenta) y si una cuenta va más atrasada que
-/// MinutosAtrasoAlerta (máximo uno por hora y cuenta).
-/// </summary>
+// descarga automática: una tarea por cuenta (fotos de agentes, cierre del día y llamadas por tramos)
 internal sealed class DescargaAutomaticaWorker(
     IServiceScopeFactory scopeFactory,
     ICuentaCccRepository cuentas,
@@ -27,7 +16,7 @@ internal sealed class DescargaAutomaticaWorker(
     TimeProvider timeProvider,
     ILogger<DescargaAutomaticaWorker> logger) : BackgroundService
 {
-    // Último correo por cuenta y motivo, para no mandar uno por minuto
+    // último correo por cuenta y motivo
     private readonly Dictionary<(string ClientId, string Motivo), DateTime> ultimosCorreos = [];
     private readonly Lock candadoCorreos = new();
 
@@ -46,9 +35,7 @@ internal sealed class DescargaAutomaticaWorker(
         logger.LogInformation("{Texto}", texto);
         await reporte.EscribirAvisoAsync(null, texto, stoppingToken);
 
-        // Una tarea por CUENTA. Las peticiones a CCC se forman en el carril de su plataforma (CarrilesCcc), así que
-        // CCC sigue recibiendo una a la vez por plataforma; pero mientras una cuenta espera a la BD (guardar,
-        // bitácora), las demás de la misma plataforma pueden usar CCC. Si la BD está lenta, CCC no se queda parado.
+        // una tarea por cuenta, las peticiones a CCC hacen fila por plataforma
         await Task.WhenAll(todas.Select(c => CorrerCuentaAsync(c, stoppingToken)));
     }
 
@@ -60,7 +47,7 @@ internal sealed class DescargaAutomaticaWorker(
             return;
         }
 
-        // Al detenerse (reinicio o apagado del IIS / App Pool) queda constancia; al volver sigue desde su avance
+        // al detenerse queda en el reporte
         var mensaje = $"La aplicación se detuvo en {Environment.MachineName} a las {Ahora():HH:mm}. " +
                       "Al volver a arrancar seguirá desde donde se quedó cada cuenta.";
         using var limite = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -78,7 +65,7 @@ internal sealed class DescargaAutomaticaWorker(
     private async Task CorrerCuentaAsync(CuentaCcc cuenta, CancellationToken cancellationToken)
     {
         var o = options.Value;
-        var estado = new EstadoCuenta();   // solo de esta cuenta (cada tarea la suya)
+        var estado = new EstadoCuenta();
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -89,7 +76,7 @@ internal sealed class DescargaAutomaticaWorker(
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
-                // Ej. sin conexión a la BD: no mata el proceso; se avisa (máximo un correo por hora) y sigue
+                // si falla (ej. sin BD) se avisa y sigue
                 logger.LogError(ex, "Falló el turno de la cuenta CCC {ClientId}", cuenta.ClientId);
                 await AvisarAsync(cuenta, "falla general", $"El turno de descarga de {cuenta.ClientId} {cuenta.Nombre} no se pudo " +
                     $"ejecutar: {ex.Message}. Se reintenta en el siguiente turno.", cancellationToken);
@@ -97,7 +84,7 @@ internal sealed class DescargaAutomaticaWorker(
 
             if (!hayPendientes)
             {
-                // Cuenta al día (o con error): se espera un poco antes de volver a revisar
+                // al día o con error: espera un poco
                 await Task.Delay(TimeSpan.FromSeconds(o.SegundosEsperaSinPendientes), timeProvider, cancellationToken);
             }
         }
@@ -105,7 +92,7 @@ internal sealed class DescargaAutomaticaWorker(
         logger.LogInformation("Descarga de la cuenta {ClientId} detenida", cuenta.ClientId);
     }
 
-    /// <returns>true si a la cuenta todavía le faltan llamadas (se le dará otro turno sin esperar).</returns>
+    // true si todavía le faltan llamadas
     private async Task<bool> TurnoAsync(CuentaCcc cuenta, EstadoCuenta estado, CancellationToken cancellationToken)
     {
         var o = options.Value;
@@ -113,7 +100,7 @@ internal sealed class DescargaAutomaticaWorker(
         var agentes = scope.ServiceProvider.GetRequiredService<DescargarAgentesService>();
         var llamadas = scope.ServiceProvider.GetRequiredService<DescargarLlamadasService>();
 
-        // 1. Foto de agentes (y tiempos del día en curso)
+        // 1. foto de agentes y tiempos del día
         if (estado.UltimaFoto is not { } ultima || Ahora() - ultima >= TimeSpan.FromMinutes(o.MinutosEntreFotosAgentes))
         {
             estado.UltimaFoto = Ahora();
@@ -125,13 +112,13 @@ internal sealed class DescargaAutomaticaWorker(
             }
         }
 
-        // 2. Cierre de los días que falten (después de HoraCierreDia): repaso de llamadas de AYER + tiempos
+        // 2. cierre de días pendientes
         if (await agentes.DiaPorCerrarAsync(cuenta, cancellationToken) is { } dia)
         {
             await CerrarDiaAsync(cuenta, dia, estado, agentes, llamadas, cancellationToken);
         }
 
-        // 3. Llamadas por tramos
+        // 3. llamadas por tramos
         var limite = Ahora().AddMinutes(-o.MargenMinutos);
         var turno = await llamadas.AvanzarAsync(cuenta, limite, cancellationToken);
         if (turno.Tramos > 0)
@@ -154,31 +141,27 @@ internal sealed class DescargaAutomaticaWorker(
                 $"(descargado hasta {turno.DescargadoHasta:dd/MM HH:mm}). Se sigue descargando.", cancellationToken);
         }
 
-        // Si hubo error no se le da otro turno inmediato (para no martillar a CCC); si avanzó y falta, sí
+        // si hubo error no se repite de inmediato
         return turno.Error is null && turno.Atraso > TimeSpan.FromSeconds(o.TramoMinimoSegundos);
     }
 
-    /// <summary>
-    /// Cierra un día. Si es AYER (y RepasarDiaAnterior): primero vuelve a pedir sus llamadas completas (repaso) y solo
-    /// si el repaso sale bien cierra sus tiempos; así el marcador TIEMPOS_AGENTES también dice "este día ya se repasó".
-    /// Días más viejos (estuvo apagada varios días) solo cierran tiempos: sus llamadas se bajaron ya tarde, completas.
-    /// </summary>
+    // cierra un día: si es ayer primero el repaso de llamadas y luego los tiempos
     private async Task CerrarDiaAsync(CuentaCcc cuenta, DateOnly dia, EstadoCuenta estado,
         DescargarAgentesService agentes, DescargarLlamadasService llamadas, CancellationToken cancellationToken)
     {
         var o = options.Value;
-        // DiaRepasado: si el repaso salió bien pero falló el cierre de tiempos, no se repite el repaso
+        // si el repaso ya salió no se repite
         if (o.RepasarDiaAnterior && dia == DateOnly.FromDateTime(Ahora()).AddDays(-1) && estado.DiaRepasado != dia)
         {
             if (estado.UltimoRepasoFallido is { } fallo && Ahora() - fallo < EsperaTrasRepasoFallido)
             {
-                return;   // falló hace poco: no se martilla a CCC con el día completo
+                return;   // falló hace poco
             }
 
             var repaso = await llamadas.RepasarDiaAsync(cuenta, dia, cancellationToken);
             if (repaso is null)
             {
-                return;   // la descarga normal todavía no pasa la medianoche: se cierra en un turno siguiente
+                return;   // la normal todavía no pasa la medianoche
             }
 
             if (repaso.TramosConError > 0)
@@ -204,7 +187,7 @@ internal sealed class DescargaAutomaticaWorker(
 
     private static readonly TimeSpan EsperaTrasRepasoFallido = TimeSpan.FromMinutes(10);
 
-    /// <summary>Lo que cada cuenta recuerda entre turnos (en memoria; lo importante vive en la BD).</summary>
+    // estado de la cuenta entre turnos
     private sealed class EstadoCuenta
     {
         public DateTime? UltimaFoto { get; set; }

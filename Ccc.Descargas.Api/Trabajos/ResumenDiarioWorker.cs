@@ -6,29 +6,22 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Api.Trabajos;
 
-/// <summary>
-/// Sección "ResumenDiario": dos correos al día para saber que la descarga sigue viva.
-/// Si a la hora del correo de inicio no llega nada, la aplicación está detenida o trabada.
-/// </summary>
+// ResumenDiario: dos correos al día para saber que la descarga sigue viva
 public sealed class ResumenDiarioOptions
 {
     public const string Seccion = "ResumenDiario";
 
     public bool Habilitado { get; init; } = true;
 
-    /// <summary>Correo de inicio del día: cómo va el día de hoy hasta esa hora.</summary>
+    // correo de inicio del día
     [Required]
     public TimeSpan HoraInicioDia { get; init; } = new(7, 0, 0);
 
-    /// <summary>Correo de fin del día: resumen del día ANTERIOR completo (después del repaso de la 1:00).</summary>
+    // correo de fin del día (resumen de ayer)
     [Required]
     public TimeSpan HoraFinDia { get; init; } = new(2, 0, 0);
 }
 
-/// <summary>
-/// Manda los correos de inicio y fin del día. Corre aparte de la descarga: aunque la descarga se
-/// trabe, el resumen sale y muestra el atraso de cada cuenta.
-/// </summary>
 internal sealed class ResumenDiarioWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<ResumenDiarioOptions> options,
@@ -57,7 +50,7 @@ internal sealed class ResumenDiarioWorker(
     {
         var ahora = Ahora();
         var hoy = ahora.Date;
-        // Inicio: de las 00:00 de hoy a ahora. Fin: el día anterior completo.
+        // inicio: hoy hasta ahora, fin: ayer completo
         var (titulo, desde, hasta) = esInicio
             ? ($"Descarga CCC activa - inicio del día {hoy:dd/MM}", hoy, ahora)
             : ($"Resumen del día {hoy.AddDays(-1):dd/MM}", hoy.AddDays(-1), hoy.AddSeconds(-1));
@@ -90,7 +83,7 @@ internal sealed class ResumenDiarioWorker(
         }
     }
 
-    // El siguiente de los dos envíos (inicio o fin del día) que todavía no pasa
+    // siguiente envío pendiente
     private (DateTime Cuando, bool EsInicio) SiguienteEnvio(DateTime ahora)
     {
         var inicio = Proximo(ahora, options.Value.HoraInicioDia);

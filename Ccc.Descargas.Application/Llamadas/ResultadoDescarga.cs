@@ -9,7 +9,7 @@ public enum EstadoTramo
 public sealed record ResultadoTramo(
     DateTime Desde, DateTime Hasta, EstadoTramo Estado, int Paginas, int Llamadas, int Insertadas, int Actualizadas, string? Mensaje);
 
-/// <summary>Resultado de una descarga MANUAL de un rango (POST api/descargas).</summary>
+// resultado de descarga manual
 public sealed record ResultadoDescarga(string ClientId, IReadOnlyList<ResultadoTramo> Tramos)
 {
     public int TotalLlamadas => Tramos.Sum(t => t.Llamadas);
@@ -17,10 +17,7 @@ public sealed record ResultadoDescarga(string ClientId, IReadOnlyList<ResultadoT
     public int TramosConError => Tramos.Count(t => t.Estado == EstadoTramo.Error);
 }
 
-/// <summary>
-/// Lo que avanzó una cuenta en un turno de la descarga automática.
-/// DescargadoHasta = todo lo anterior ya está; Error = el tramo que falló (se reintenta en el siguiente turno).
-/// </summary>
+// lo que avanzó una cuenta en un turno
 public sealed record ResultadoTurno(
     string ClientId,
     int Tramos,
@@ -29,6 +26,6 @@ public sealed record ResultadoTurno(
     DateTime Limite,
     RegistroTramo? Error)
 {
-    /// <summary>Lo que falta por bajar hasta el límite (cero = al día).</summary>
+    // lo que falta, cero = al día
     public TimeSpan Atraso => DescargadoHasta >= Limite ? TimeSpan.Zero : Limite - DescargadoHasta;
 }

@@ -7,14 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Application.Agentes;
 
-/// <summary>
-/// Agentes de una cuenta:
-/// - Foto (cada MinutosEntreFotosAgentes): Agent/getTimes daily del día en curso (se guardan sus tiempos y da la
-///   lista de agentes) y luego Agent/getStatus de cada agente (una petición por agente: CCC no acepta varios).
-/// - Cierre de día (después de HoraCierreDia): Agent/getTimes del día anterior completo; mueve el avance
-///   TIEMPOS_AGENTES para no repetirlo. La primera vez de una cuenta no cierra días anteriores a su arranque.
-/// Cada paso queda en la bitácora de la cuenta.
-/// </summary>
+// agentes de una cuenta: foto de estatus, tiempos del día y cierre de días
 public sealed class DescargarAgentesService(
     ICuentaCccRepository cuentas,
     ICccClient cccClient,
@@ -27,7 +20,7 @@ public sealed class DescargarAgentesService(
 {
     public CuentaCcc? ObtenerCuenta(string clientId) => cuentas.ObtenerPorId(clientId);
 
-    /// <summary>Tiempos del día en curso + foto de estatus de cada agente del día.</summary>
+    // tiempos del día + foto de estatus
     public async Task<(RegistroTramo Tiempos, RegistroTramo? Estatus)> TomarFotoAsync(
         CuentaCcc cuenta, OrigenDescarga origen, CancellationToken cancellationToken)
     {
@@ -61,7 +54,7 @@ public sealed class DescargarAgentesService(
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                // Un agente con error no detiene a los demás
+                // si un agente falla siguen los demás
                 errores++;
                 ultimoError = DescargarLlamadasService.Explicar(ex, $"agente {agente.AgentId}");
                 logger.LogWarning(ex, "Falló Agent/getStatus CCC {ClientId} agente {UserId}", cuenta.ClientId, agente.AgentId);
@@ -87,9 +80,7 @@ public sealed class DescargarAgentesService(
         return (registroTiempos, registroEstatus);
     }
 
-    /// <summary>
-    /// El siguiente día cuyos tiempos falta cerrar (el más antiguo, hasta DiasCierreAtras), o null si ya está al día.
-    /// </summary>
+    // siguiente día por cerrar, null si está al día
     public async Task<DateOnly?> DiaPorCerrarAsync(CuentaCcc cuenta, CancellationToken cancellationToken)
     {
         var o = options.Value;
@@ -104,8 +95,7 @@ public sealed class DescargarAgentesService(
         var avance = await bitacora.ObtenerAvanceAsync(cuenta.ClientId, TipoDescarga.TiemposAgentes, cancellationToken);
         if (avance is null)
         {
-            // Primera vez de la cuenta: no se cierran días anteriores a cuando empezó a correr. Se deja el marcador
-            // en hoy; el primer cierre será el de hoy, mañana después de HoraCierreDia.
+            // primera vez: no cierra días anteriores, el marcador queda en hoy
             var inicioHoy = hoy.ToDateTime(TimeOnly.MinValue);
             await bitacora.RegistrarAsync(new RegistroTramo(cuenta.ClientId, cuenta.Nombre, TipoDescarga.TiemposAgentes,
                 inicioHoy.AddSeconds(-1), inicioHoy.AddSeconds(-1), null, OrigenDescarga.Automatica, true, 0, 0, 0, 0, ahora, ahora,
@@ -123,7 +113,7 @@ public sealed class DescargarAgentesService(
         return siguiente <= ayer ? siguiente : null;
     }
 
-    /// <summary>Tiempos del día completo; si sale bien, el avance TIEMPOS_AGENTES pasa al día siguiente.</summary>
+    // tiempos del día completo, si sale bien pasa al día siguiente
     public async Task<RegistroTramo> CerrarDiaAsync(CuentaCcc cuenta, DateOnly dia, OrigenDescarga origen, CancellationToken cancellationToken)
     {
         var desde = dia.ToDateTime(TimeOnly.MinValue);

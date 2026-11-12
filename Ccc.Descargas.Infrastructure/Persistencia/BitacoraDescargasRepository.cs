@@ -7,10 +7,7 @@ using static Ccc.Descargas.Infrastructure.Persistencia.ProcedimientoCuenta;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Bitácora (dbo.TBL_BITACORA_DESCARGAS_CCC) y marcador de avance (dbo.TBL_AVANCE_DESCARGAS_CCC), siempre por el
-/// SP único de la cuenta: @OPCION 4 registra, 5 consulta el avance, 6 arma el resumen.
-/// </summary>
+// bitácora y avance: @OPCION 4 registra, 5 avance, 6 resumen
 internal sealed class BitacoraDescargasRepository(IOptions<BaseDatosOptions> options) : IBitacoraDescargas
 {
     public Task RegistrarAsync(RegistroTramo r, bool moverAvance, CancellationToken cancellationToken) =>

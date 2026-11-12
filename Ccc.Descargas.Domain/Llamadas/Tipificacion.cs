@@ -1,9 +1,6 @@
 namespace Ccc.Descargas.Domain.Llamadas;
 
-/// <summary>
-/// Un elemento del arreglo "dispositions" de CCC:
-/// [{"&lt;Clave&gt;": [{"disp_id": ..., "list_disp_id": ..., "name": ..., "text": ..., ...}]}]
-/// </summary>
+// elemento de dispositions
 public sealed record Tipificacion(
     string Clave,
     long DispId,

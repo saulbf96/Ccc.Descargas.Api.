@@ -1,13 +1,9 @@
-// ARCHIVO GENERADO por CCC\TEST\generador_scripts\generar.py: no editar a mano (se sobrescribe).
+// generado por generar.py, no editar
 using System.Collections.Frozen;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Objetos de BD de una cuenta: su SP único dbo.USP_CCC_&lt;Sufijo&gt; (todo va por @OPCION), el tipo de sus
-/// llamadas dbo.TT_LLAMADAS_CCC_&lt;Sufijo&gt; y los ref_str_* que tienen columna en su tabla de llamadas,
-/// con el mismo nombre que manda CCC y en el MISMO orden que su tipo tabla.
-/// </summary>
+// objetos de BD por cuenta
 internal sealed record TablaCuenta(string Sufijo, IReadOnlyList<string> ColumnasLead)
 {
     public string Procedimiento => $"dbo.USP_CCC_{Sufijo}";
@@ -19,11 +15,7 @@ internal sealed record TablaCuenta(string Sufijo, IReadOnlyList<string> Columnas
     public const string TipoTiempos = "dbo.TT_TIEMPOS_AGENTES_CCC";
 }
 
-/// <summary>
-/// Cada cuenta CCC tiene sus propias tablas. Un ref_str_ que no esté en la lista de su cuenta se guarda en
-/// CAMPOS_EXTRA. Para darle columna: agregarlo en generar.py y regenerar. Una cuenta que no esté aquí no
-/// tiene tablas y no se puede guardar.
-/// </summary>
+// tablas por cuenta
 internal static class TablasCuenta
 {
     public static readonly FrozenDictionary<int, TablaCuenta> PorCuenta = new Dictionary<int, TablaCuenta>

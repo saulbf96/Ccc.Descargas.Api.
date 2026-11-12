@@ -7,9 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Infrastructure.Reportes;
 
-/// <summary>
-/// Sección "Reportes": carpeta de los .txt. Relativa = dentro de la carpeta de la aplicación.
-/// </summary>
+// sección Reportes
 public sealed class ReportesOptions
 {
     public const string Seccion = "Reportes";
@@ -17,16 +15,13 @@ public sealed class ReportesOptions
     public string Carpeta { get; init; } = "reportes";
 }
 
-/// <summary>
-/// Una carpeta por cuenta y un .txt por día (reportes\CONSU_2812\CONSU_2812_2026-10-30.txt) con una línea por cada
-/// descarga o incidencia, para revisar hora por hora qué pasó. Nunca escribe datos de las llamadas.
-/// </summary>
+// un .txt por cuenta y día
 internal sealed class ReporteTxt(
     IOptions<ReportesOptions> options,
     ICuentaCccRepository cuentas,
     TimeProvider timeProvider) : IReporteDescargas
 {
-    // Dos plataformas escriben en paralelo: un archivo a la vez
+    // un archivo a la vez
     private static readonly SemaphoreSlim Candado = new(1, 1);
     private static readonly CultureInfo Mx = CultureInfo.GetCultureInfo("es-MX");
 
@@ -73,7 +68,7 @@ internal sealed class ReporteTxt(
             foreach (var clientId in clientIds)
             {
                 var nombre = cuentas.ObtenerPorId(clientId)?.Nombre ?? "";
-                // Carpeta por cuenta y un archivo por día: CONSU_2812\CONSU_2812_2026-10-30.txt
+                // carpeta por cuenta, un archivo por día
                 var cuenta = TablasCuenta.PorCuenta.TryGetValue(int.Parse(clientId), out var tabla) ? tabla.Sufijo : clientId;
                 var carpeta = Path.Combine(raiz, LimpiarNombre(cuenta));
                 Directory.CreateDirectory(carpeta);

@@ -9,18 +9,13 @@ namespace Ccc.Descargas.Api.Controllers;
 [Route("api/descargas")]
 public sealed class DescargasController(DescargarLlamadasService descargarLlamadas) : ControllerBase
 {
-    /// <summary>
-    /// Descarga de CCC y guarda en la BD las llamadas de una cuenta en un rango (máximo 24 horas), por tramos.
-    /// Repetir un rango no duplica: actualiza las llamadas que ya estaban y agrega las nuevas.
-    /// No mueve el avance de la descarga automática.
-    /// </summary>
+    // descarga las llamadas de una cuenta en un rango (máximo 24 h), no mueve el avance
     [HttpPost]
     [ProducesResponseType<ResultadoDescarga>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Descargar(SolicitudDescarga solicitud, CancellationToken cancellationToken)
     {
-        // [Required] ya garantizó que vienen; aquí solo se toma el valor
         var desde = solicitud.Desde!.Value;
         var hasta = solicitud.Hasta!.Value;
 
@@ -31,7 +26,7 @@ public sealed class DescargasController(DescargarLlamadasService descargarLlamad
 
         if (hasta - desde > DescargarLlamadasService.RangoMaximoManual)
         {
-            // Protege a la API y a CCC de rangos enormes; los periodos largos los hace el proceso automático
+            // máximo 24 horas por consulta
             return ValidationProblem(detail: $"El rango máximo por petición es de {DescargarLlamadasService.RangoMaximoManual.TotalHours} horas.");
         }
 
@@ -48,7 +43,7 @@ public sealed class SolicitudDescarga
     [Required]
     public DateTime? Desde { get; init; }
 
-    /// <summary>No incluido: Desde 10:00 y Hasta 11:00 = de 10:00:00 a 10:59:59.</summary>
+    // Hasta no se incluye: 10:00 a 11:00 = 10:00:00 a 10:59:59
     [Required]
     public DateTime? Hasta { get; init; }
 }
@@ -57,7 +52,7 @@ public sealed class SolicitudDescarga
 [Route("api/agentes")]
 public sealed class AgentesController(DescargarAgentesService agentes) : ControllerBase
 {
-    /// <summary>Toma ahora la foto de estatus de los agentes de una cuenta (y actualiza sus tiempos del día).</summary>
+    // foto de estatus de los agentes
     [HttpPost("{clientId}/foto")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -73,7 +68,7 @@ public sealed class AgentesController(DescargarAgentesService agentes) : Control
         return Ok(new { tiempos, estatus });
     }
 
-    /// <summary>Vuelve a bajar los tiempos de un día completo (no mueve el avance de la automática).</summary>
+    // vuelve a bajar los tiempos de un día
     [HttpPost("{clientId}/tiempos/{dia}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -13,7 +13,7 @@ public class CccAgenteMapperTests
     [Fact]
     public void GetTimes_columnas_fijas_pausas_por_tipo_y_lo_demas_en_extras()
     {
-        // Campos reales de 2812 (2026-11-10), recortados
+        // campos de 2812 recortados
         var t = CccAgenteMapper.MapearTiempo(JsonDocument.Parse("""
             {
               "agent_id": 146067, "date": "2026-11-10", "agent_username": "UNOAGENTE10", "agent_name": "DIANA",

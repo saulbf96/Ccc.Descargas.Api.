@@ -6,13 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Application.Llamadas;
 
-/// <summary>
-/// Descarga las llamadas de una cuenta POR TRAMOS ADAPTATIVOS (30 s a 15 min): pedir rangos chicos a CCC es
-/// mucho más rápido que la hora completa. Cada tramo recorre todas sus páginas, se guarda y queda en la
-/// bitácora. La automática sigue desde el MARCADOR DE AVANCE de la cuenta (sin límite de 24 h): si un tramo
-/// falla, el avance no se mueve y en el siguiente turno se vuelve a pedir ese mismo tramo.
-/// Guardar es idempotente: repetir un tramo actualiza lo que ya estaba y agrega lo nuevo.
-/// </summary>
+// descarga las llamadas de una cuenta por tramos y las guarda
 public sealed class DescargarLlamadasService(
     ICuentaCccRepository cuentas,
     ICccClient cccClient,
@@ -23,21 +17,17 @@ public sealed class DescargarLlamadasService(
     TimeProvider timeProvider,
     ILogger<DescargarLlamadasService> logger)
 {
-    public const int TamanoPagina = 1000;            // máximo que regresa CCC por página
-    public const int MaxPaginasPorTramo = 500;       // freno de seguridad (500 mil llamadas en un solo tramo)
+    public const int TamanoPagina = 1000;   // máximo de CCC por página
+    public const int MaxPaginasPorTramo = 500;   // tope de seguridad
     public static readonly TimeSpan RangoMaximoManual = TimeSpan.FromHours(24);
 
-    /// <summary>
-    /// Descarga automática: avanza la cuenta desde su marcador hasta <paramref name="limite"/> (ahora - margen),
-    /// tramo por tramo, durante máximo MinutosPorTurno. Se detiene en el primer tramo con error.
-    /// </summary>
+    // automática: avanza desde el marcador hasta el límite
     public async Task<ResultadoTurno> AvanzarAsync(CuentaCcc cuenta, DateTime limite, CancellationToken cancellationToken)
     {
         var o = options.Value;
-        limite = TruncarASegundo(limite);   // la BD guarda segundos enteros: sin esto se redondearía
+        limite = TruncarASegundo(limite);   // la BD guarda segundos enteros
         var avance = await bitacora.ObtenerAvanceAsync(cuenta.ClientId, TipoDescarga.Llamadas, cancellationToken);
-        // Primera vez de la cuenta (sin marcador): desde las 00:00 de ese día; nunca días anteriores ni la historia.
-        // Después, siempre desde el marcador: si estuvo apagada, baja todo lo que faltó.
+        // primera vez: desde las 00:00 de hoy, después desde el marcador
         var desde = avance?.DescargadoHasta ?? limite.Date;
         var tamano = TramosAdaptativos.Inicial(avance?.TamanoTramoSegundos, o);
         var finTurno = Ahora().AddMinutes(o.MinutosPorTurno);
@@ -51,12 +41,12 @@ public sealed class DescargarLlamadasService(
         {
             if (Min(desde.AddSeconds(tamano), limite).AddSeconds(-1) < desde)
             {
-                break;   // falta menos de un segundo para el límite
+                break;   // falta menos de un segundo
             }
 
             (var registro, tamano) = await BajarTramoAsync(cuenta, desde, limite, tamano, OrigenDescarga.Automatica,
                 moverAvance: true, etiqueta: null, cancellationToken);
-            var hasta = registro.Hasta;   // incluido: 10:00:00 a 10:00:59
+            var hasta = registro.Hasta;   // incluido
 
             if (!registro.Exitosa)
             {
@@ -76,7 +66,7 @@ public sealed class DescargarLlamadasService(
 
         if (tramos > 0)
         {
-            // Una línea por turno en el .txt (no una por tramo de 1 minuto)
+            // una línea por turno en el .txt
             await EscribirReporteAsync(new RegistroTramo(cuenta.ClientId, cuenta.Nombre, TipoDescarga.Llamadas, inicioTurno,
                 desde.AddSeconds(-1), tamano, OrigenDescarga.Automatica, true, paginas, total, insertadas, actualizadas,
                 inicio, Ahora(), $"{tramos} tramo(s)"), cancellationToken);
@@ -85,10 +75,7 @@ public sealed class DescargarLlamadasService(
         return new ResultadoTurno(cuenta.ClientId, tramos, total, desde, limite, error);
     }
 
-    /// <summary>
-    /// Descarga MANUAL de un rango (máximo 24 h), por tramos. No mueve el marcador de avance de la automática.
-    /// Un tramo con error no detiene los demás.
-    /// </summary>
+    // descarga manual de un rango, no mueve el marcador
     public async Task<ResultadoDescarga?> DescargarRangoAsync(
         string clientId, DateTime desde, DateTime hasta, CancellationToken cancellationToken)
     {
@@ -105,13 +92,7 @@ public sealed class DescargarLlamadasService(
         return resultado;
     }
 
-    /// <summary>
-    /// REPASO del día completo (00:00:00 a 23:59:59), ya pasada la medianoche: vuelve a pedir todo el día a CCC para
-    /// recoger lo que la descarga casi en tiempo real no alcanzó a ver (llamadas largas que entraron tarde al
-    /// historial, tipificaciones capturadas después). Por call_id no duplica: inserta lo que faltaba y actualiza
-    /// lo que cambió. No mueve el marcador. Regresa null si la descarga normal todavía no termina ese día.
-    /// En la bitácora sus tramos quedan como AUTOMATICA con MENSAJE "Repaso del dd/MM".
-    /// </summary>
+    // repaso del día completo, null si la normal no ha pasado la medianoche
     public async Task<ResultadoDescarga?> RepasarDiaAsync(CuentaCcc cuenta, DateOnly dia, CancellationToken cancellationToken)
     {
         var inicioDia = dia.ToDateTime(TimeOnly.MinValue);
@@ -119,14 +100,14 @@ public sealed class DescargarLlamadasService(
         var avance = await bitacora.ObtenerAvanceAsync(cuenta.ClientId, TipoDescarga.Llamadas, cancellationToken);
         if (avance is null || avance.DescargadoHasta < finDia)
         {
-            return null;   // primero que la descarga normal pase la medianoche
+            return null;
         }
 
         var inicio = Ahora();
         var etiqueta = $"Repaso del {dia:dd/MM}";
         var resultado = await DescargarTramosAsync(cuenta, inicioDia, finDia, OrigenDescarga.Automatica, etiqueta, cancellationToken);
 
-        // Una sola línea en el .txt por todo el repaso (los tramos con error ya se escribieron uno por uno)
+        // una línea por todo el repaso
         var errores = resultado.TramosConError;
         await EscribirReporteAsync(new RegistroTramo(cuenta.ClientId, cuenta.Nombre, TipoDescarga.Llamadas, inicioDia,
             finDia.AddSeconds(-1), null, OrigenDescarga.Automatica, errores == 0, resultado.Tramos.Sum(t => t.Paginas),
@@ -138,8 +119,7 @@ public sealed class DescargarLlamadasService(
         return resultado;
     }
 
-    // Recorre [desde, hasta) por tramos adaptativos sin mover el marcador. Un tramo con error no detiene a los demás.
-    // etiqueta = null: manual (cada tramo al .txt); con etiqueta: repaso (solo los tramos con error al .txt).
+    // recorre el rango por tramos sin mover el marcador
     private async Task<ResultadoDescarga> DescargarTramosAsync(
         CuentaCcc cuenta, DateTime desde, DateTime hasta, OrigenDescarga origen, string? etiqueta, CancellationToken cancellationToken)
     {
@@ -171,13 +151,7 @@ public sealed class DescargarLlamadasService(
         return new ResultadoDescarga(cuenta.ClientId, resultados);
     }
 
-    /// <summary>
-    /// Baja UN tramo desde <paramref name="desde"/> (de <paramref name="tamano"/> segundos, sin pasar de
-    /// <paramref name="limite"/>) y lo registra en la bitácora. Si CCC tardó demasiado, falló del lado de CCC (5xx) o
-    /// el tramo tuvo demasiadas páginas, reintenta el MISMO inicio con la mitad del tramo (hasta ReintentosReduciendo
-    /// veces): un rango más chico es una consulta más ligera para CCC. Cada intento fallido queda en la bitácora.
-    /// </summary>
-    /// <returns>El registro del último intento y el tamaño que se usó en él.</returns>
+    // baja un tramo; si hay timeout o 5xx reintenta a la mitad
     private async Task<(RegistroTramo Registro, int Tamano)> BajarTramoAsync(CuentaCcc cuenta, DateTime desde, DateTime limite,
         int tamano, OrigenDescarga origen, bool moverAvance, string? etiqueta, CancellationToken cancellationToken)
     {
@@ -205,8 +179,7 @@ public sealed class DescargarLlamadasService(
         }
     }
 
-    // Fallas en las que un rango más chico sí ayuda: timeout (aquí un OperationCanceledException solo llega si nadie
-    // canceló), error interno de CCC o demasiadas páginas. Credenciales, red u "ocupado" no se arreglan achicando.
+    // errores donde sí ayuda achicar el tramo
     private static bool ConvieneReducir(Exception ex) =>
         ex is TopePaginasException or OperationCanceledException or CccApiException { StatusCode: >= 500, Ocupado: false };
 
@@ -220,8 +193,7 @@ public sealed class DescargarLlamadasService(
         var relojCcc = new System.Diagnostics.Stopwatch();
         var relojBd = new System.Diagnostics.Stopwatch();
 
-        // PIPELINE: mientras la BD guarda la página N, ya se le está pidiendo la N+1 a CCC.
-        // El tiempo por página es el mayor de los dos y no la suma (CCC es lo lento: ~2-3 s por página).
+        // mientras se guarda una página se pide la siguiente
         Task<(int Insertadas, int Actualizadas)>? guardando = null;
         var paginaGuardando = 0;
         var donde = "página 1";
@@ -234,7 +206,7 @@ public sealed class DescargarLlamadasService(
             }
 
             donde = $"guardar página {paginaGuardando}";
-            relojBd.Start();   // solo cuenta lo que se espera DESPUÉS de que CCC ya respondió
+            relojBd.Start();
             try
             {
                 var (ins, act) = await guardando;
@@ -264,7 +236,7 @@ public sealed class DescargarLlamadasService(
                     relojCcc.Stop();
                 }
 
-                await TerminarGuardadoAsync();   // la página anterior ya debió terminar mientras CCC respondía
+                await TerminarGuardadoAsync();
                 paginas++;
 
                 if (pagina.Count > 0)
@@ -276,7 +248,7 @@ public sealed class DescargarLlamadasService(
 
                 if (pagina.Count < TamanoPagina)
                 {
-                    break;   // vino vacía o incompleta: ya no hay más páginas
+                    break;   // ya no hay más páginas
                 }
 
                 if (paginas >= MaxPaginasPorTramo)
@@ -293,9 +265,9 @@ public sealed class DescargarLlamadasService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            var lugar = donde;   // dónde falló de verdad (antes de esperar el guardado pendiente)
+            var lugar = donde;
 
-            // Si CCC falló con un guardado en curso, se espera a que termine (no se deja una tarea suelta)
+            // esperar el guardado pendiente
             if (guardando is not null)
             {
                 try
@@ -308,7 +280,7 @@ public sealed class DescargarLlamadasService(
                 }
             }
 
-            // Lo guardado antes del error se queda (no duplica al repetir el tramo)
+            // lo guardado antes del error se queda
             logger.LogWarning(ex, "Falló la descarga CCC {ClientId} de {Desde:yyyy-MM-dd HH:mm:ss}-{Hasta:HH:mm:ss} ({Donde})",
                 cuenta.ClientId, desde, hasta, lugar);
 
@@ -318,8 +290,7 @@ public sealed class DescargarLlamadasService(
         }
     }
 
-    // Si la bitácora falla no se pierde el resultado; se avisa en el log. Si era automática, como el avance no se
-    // movió, el mismo tramo se vuelve a pedir y no duplica.
+    // si la bitácora falla solo se avisa en el log
     private async Task RegistrarEnBitacoraAsync(RegistroTramo registro, bool moverAvance, CancellationToken cancellationToken)
     {
         try
@@ -349,7 +320,7 @@ public sealed class DescargarLlamadasService(
         }
     }
 
-    /// <summary>El porqué de la falla, en palabras claras para el reporte y el correo.</summary>
+    // mensaje de error para reporte y correo
     public static string Explicar(Exception ex, string donde)
     {
         var motivo = ex switch

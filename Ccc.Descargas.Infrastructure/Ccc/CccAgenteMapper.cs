@@ -6,11 +6,7 @@ using Ccc.Descargas.Domain.Agentes;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Convierte las respuestas de Agent/getStatus y Agent/getTimes sin perder nada: campos conocidos a
-/// propiedades, ref_str_* del lead a DatosLeadJson, pausas por tipo a PausasJson y lo demás a CamposExtraJson.
-/// Tolerante: un valor que no se puede convertir queda en NULL y su texto original se guarda en CamposExtraJson.
-/// </summary>
+// convierte getStatus y getTimes
 internal static partial class CccAgenteMapper
 {
     private const string FormatoFecha = "yyyy-MM-dd HH:mm:ss";
@@ -31,7 +27,7 @@ internal static partial class CccAgenteMapper
         "status_monitoring_minutes", "status_wait_campaign_minutes",
     ];
 
-    // status_pause_baÑo_minutes -> "baÑo". status_pause_minutes (el total) NO entra: tiene su columna.
+    // status_pause_xxx_minutes -> xxx (el total tiene su columna)
     [GeneratedRegex(@"^status_pause_(.+)_minutes$")]
     private static partial Regex Pausa();
 
@@ -136,7 +132,7 @@ internal static partial class CccAgenteMapper
         return decimal.TryParse(texto, NumberStyles.Number, CultureInfo.InvariantCulture, out resultado);
     }
 
-    /// <summary>Lee campos; si uno no se puede convertir, guarda su texto original en extras.</summary>
+    // lee campos, si no convierte guarda el texto en extras
     private readonly struct Lector(JsonElement json, JsonObject extras)
     {
         public string? Texto(string campo)
@@ -176,7 +172,7 @@ internal static partial class CccAgenteMapper
             var valor = convertir(texto);
             if (valor is null)
             {
-                extras[campo] = texto;   // no se pierde: se guarda tal cual
+                extras[campo] = texto;
             }
 
             return valor;

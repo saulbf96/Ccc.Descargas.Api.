@@ -1,10 +1,6 @@
 namespace Ccc.Descargas.Domain.Agentes;
 
-/// <summary>
-/// Tiempos de UN agente en UN día (Agent/getTimes type=daily). Las pausas cambian por cuenta (baño, comida,
-/// capacitación...): van en PausasJson como {tipo: minutos}. Lo demás que mande CCC sin propiedad aquí
-/// (los hh:mm:ss, tiempo excedido...) va en CamposExtraJson para no perder nada.
-/// </summary>
+// tiempos de un agente por día (Agent/getTimes)
 public sealed record TiempoAgente
 {
     public required long AgentId { get; init; }

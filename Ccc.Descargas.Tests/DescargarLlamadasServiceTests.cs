@@ -168,7 +168,7 @@ public class DescargarLlamadasServiceTests
     [MemberData(nameof(Fallas))]
     public async Task Un_tramo_con_error_no_mueve_el_avance_y_explica_el_motivo(Exception falla, string motivoEsperado)
     {
-        // Sin reintentos achicando: aquí se prueba que, si al final falla, el avance no se mueve
+        // sin reintentos: si falla el avance no se mueve
         var (servicio, _, bitacora, reporte) = Crear(new CccFake(() => Datos.Pagina(1000), () => throw falla),
             opciones: new DescargaOptions { ReintentosReduciendo = 0 });
         ConAvance(bitacora, Hora10);

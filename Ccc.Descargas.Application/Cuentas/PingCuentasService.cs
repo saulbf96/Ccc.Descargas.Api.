@@ -6,7 +6,7 @@ public sealed class PingCuentasService(ICuentaCccRepository cuentas, ICccClient 
 {
     public async Task<IReadOnlyList<ResultadoPing>> PingTodasAsync(CancellationToken cancellationToken)
     {
-        // Las cuentas son independientes entre sí, así que se prueban en paralelo
+        // se prueban en paralelo
         var tareas = cuentas.ObtenerTodas()
             .Select(cuenta => cccClient.PingAsync(cuenta, cancellationToken));
 

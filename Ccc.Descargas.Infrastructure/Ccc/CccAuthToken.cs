@@ -3,9 +3,7 @@ using System.Text;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Fórmula de la sección "Authentication Protocol" de la documentación de CCC.
-/// </summary>
+// token de autenticación de CCC
 internal static class CccAuthToken
 {
     public static string Calcular(string clientId, string username, string secretKey, string data, string requestDateTime)

@@ -7,11 +7,7 @@ using static Ccc.Descargas.Infrastructure.Persistencia.ProcedimientoCuenta;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Guarda las fotos de estatus (@OPCION = 2) y los tiempos por día (@OPCION = 3) de los agentes de una cuenta
-/// con su SP único, mandando el lote completo en un parámetro tipo tabla.
-/// Los tipos dbo.TT_ESTATUS_AGENTES_CCC y dbo.TT_TIEMPOS_AGENTES_CCC son iguales para todas las cuentas.
-/// </summary>
+// guarda fotos (@OPCION 2) y tiempos (@OPCION 3)
 internal sealed class AgenteRepository(IOptions<BaseDatosOptions> options) : IAgenteRepository
 {
     public async Task<int> GuardarEstatusAsync(string clientId, IReadOnlyList<EstatusAgente> fotos, CancellationToken cancellationToken)
@@ -36,7 +32,7 @@ internal sealed class AgenteRepository(IOptions<BaseDatosOptions> options) : IAg
             }),
             LeerConteosAsync, cancellationToken);
 
-    // MISMO orden que dbo.TT_ESTATUS_AGENTES_CCC (script 3)
+    // mismo orden que TT_ESTATUS_AGENTES_CCC
     internal static DataTable CrearTablaEstatus(IReadOnlyList<EstatusAgente> fotos)
     {
         var t = new DataTable();
@@ -59,7 +55,7 @@ internal sealed class AgenteRepository(IOptions<BaseDatosOptions> options) : IAg
         t.Columns.Add("DATOS_LEAD", typeof(string));
         t.Columns.Add("CAMPOS_EXTRA", typeof(string));
 
-        // Un agente solo una vez por foto (la llave del tipo es user_id + FECHA_FOTO)
+        // un agente una vez por foto
         foreach (var f in fotos.DistinctBy(f => (f.UserId, f.FechaFoto)))
         {
             t.Rows.Add(f.FechaFoto, f.UserId, Nulo(f.AgentUsername), Nulo(f.AgentName), Nulo(f.LoginId), Nulo(f.AgentStatus),
@@ -71,7 +67,7 @@ internal sealed class AgenteRepository(IOptions<BaseDatosOptions> options) : IAg
         return t;
     }
 
-    // MISMO orden que dbo.TT_TIEMPOS_AGENTES_CCC (script 4)
+    // mismo orden que TT_TIEMPOS_AGENTES_CCC
     internal static DataTable CrearTablaTiempos(IReadOnlyList<TiempoAgente> tiempos)
     {
         var t = new DataTable();

@@ -8,10 +8,7 @@ using MimeKit;
 
 namespace Ccc.Descargas.Infrastructure.Notificaciones;
 
-/// <summary>
-/// Sección "Correo". Mientras Habilitado = false no se manda nada (solo queda en el log).
-/// La Contrasena NUNCA va en appsettings: en el servidor va como variable cifrada con DPAPI (Correo__Contrasena).
-/// </summary>
+// sección Correo, la contraseña va cifrada con DPAPI
 public sealed class CorreoOptions
 {
     public const string Seccion = "Correo";
@@ -22,12 +19,12 @@ public sealed class CorreoOptions
 
     public int Puerto { get; init; } = 587;
 
-    /// <summary>StartTls (587, Office 365 / Gmail), SslOnConnect (465) o Ninguna (relay interno, 25).</summary>
+    // StartTls (587), SslOnConnect (465) o Ninguna (25)
     public string Seguridad { get; init; } = "StartTls";
 
     public string Usuario { get; init; } = string.Empty;
 
-    // set (no init) para descifrarla una sola vez al arrancar
+    // set para descifrarla al arrancar
     public string Contrasena { get; set; } = string.Empty;
 
     public string De { get; init; } = string.Empty;
@@ -35,16 +32,14 @@ public sealed class CorreoOptions
     public string[] Para { get; init; } = [];
 }
 
-/// <summary>Descifra la contraseña del correo una sola vez, al cargar la configuración.</summary>
+// descifra la contraseña del correo
 internal sealed class DescifrarContrasenaCorreo : IPostConfigureOptions<CorreoOptions>
 {
     public void PostConfigure(string? name, CorreoOptions options) =>
         options.Contrasena = ProteccionDpapi.DescifrarSiAplica(options.Contrasena, "la contraseña del correo (Correo:Contrasena)");
 }
 
-/// <summary>
-/// Manda los avisos por SMTP. Si el correo falla, NO tumba la descarga: solo queda en el log.
-/// </summary>
+// manda avisos por SMTP, si falla solo queda en el log
 internal sealed class NotificadorCorreo(IOptions<CorreoOptions> options, ILogger<NotificadorCorreo> logger) : INotificador
 {
     public async Task EnviarAsync(string asunto, string cuerpo, CancellationToken cancellationToken)
@@ -83,7 +78,7 @@ internal sealed class NotificadorCorreo(IOptions<CorreoOptions> options, ILogger
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // El motivo exacto (servidor, puerto, autenticación...) para corregir la configuración; nunca la contraseña
+            // motivo de la falla, sin la contraseña
             logger.LogError(ex, "Falló el correo de prueba");
             return $"{ex.GetType().Name}: {ex.Message}";
         }

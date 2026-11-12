@@ -4,11 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Por ahora las cuentas salen de la configuración. Si después viven en BD,
-/// solo se cambia esta clase; Application no se entera.
-/// </summary>
-/// 
+// cuentas desde la configuración
 
 
 internal sealed class CuentaCccRepository(IOptions<CccOptions> options) : ICuentaCccRepository

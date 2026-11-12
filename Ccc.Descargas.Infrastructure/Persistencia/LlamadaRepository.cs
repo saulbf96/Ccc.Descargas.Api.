@@ -7,11 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Guarda un lote de llamadas de UNA cuenta en su tabla dbo.TBL_LLAMADAS_CCC_&lt;cuenta&gt; con su SP único
-/// dbo.USP_CCC_&lt;cuenta&gt; (@OPCION = 1), mandando la página completa en un parámetro tipo tabla
-/// (TVP): una sola llamada a la BD y una sola transacción.
-/// </summary>
+// guarda llamadas con el SP de la cuenta (@OPCION 1)
 internal sealed class LlamadaRepository(IOptions<BaseDatosOptions> options) : ILlamadaRepository
 {
     public async Task<(int Insertadas, int Actualizadas)> GuardarAsync(IReadOnlyList<Llamada> llamadas, CancellationToken cancellationToken)
@@ -22,7 +18,7 @@ internal sealed class LlamadaRepository(IOptions<BaseDatosOptions> options) : IL
             throw new InvalidOperationException("Un lote solo puede traer llamadas de una cuenta.");
         }
 
-        // El nombre del SP y del tipo sale de la lista fija de cuentas, nunca de un texto recibido
+        // nombre del SP de la lista fija de cuentas
         var tablaCuenta = ProcedimientoCuenta.Tabla(clientId);
 
         return await ProcedimientoCuenta.EjecutarAsync(options.Value, tablaCuenta, ProcedimientoCuenta.GuardarLlamadas,
@@ -34,8 +30,7 @@ internal sealed class LlamadaRepository(IOptions<BaseDatosOptions> options) : IL
             ProcedimientoCuenta.LeerConteosAsync, cancellationToken);
     }
 
-    // Las columnas deben ir en el MISMO orden que en el tipo dbo.TT_LLAMADAS_CCC_<cuenta>:
-    // campos de la API, tipificación, los ref_str_* de la cuenta y al final CAMPOS_EXTRA
+    // mismo orden que TT_LLAMADAS_CCC_<cuenta>
     private static DataTable CrearTablaLlamadas(IReadOnlyList<Llamada> llamadas, IReadOnlyList<string> columnasLead)
     {
         var tabla = new DataTable();
@@ -143,7 +138,7 @@ internal sealed class LlamadaRepository(IOptions<BaseDatosOptions> options) : IL
 
             foreach (var (columna, valor) in l.DatosLead)
             {
-                fila[columna] = Nulo(valor);   // las que no traiga la llamada se quedan en NULL
+                fila[columna] = Nulo(valor);
             }
             fila["CAMPOS_EXTRA"] = Nulo(l.CamposExtraJson);
             tabla.Rows.Add(fila);

@@ -1,10 +1,6 @@
 namespace Ccc.Descargas.Domain.Llamadas;
 
-/// <summary>
-/// Una llamada tal como la regresa CCC (CallHistory/Search). Se guarda TODO lo que trae:
-/// los campos fijos como propiedades, los ref_str_* en DatosLead y cualquier campo
-/// sin columna en la BD en CamposExtraJson.
-/// </summary>
+// llamada de CallHistory/Search
 public sealed record Llamada
 {
     public required int ClientId { get; init; }
@@ -42,20 +38,14 @@ public sealed record Llamada
     public long? LeadEncryptedId { get; init; }
     public int? Attempts { get; init; }
 
-    /// <summary>La tipificación de la llamada (primer elemento de "dispositions"), o null si no tiene.</summary>
+    // tipificación, null si no tiene
     public Tipificacion? Tipificacion { get; init; }
 
-    /// <summary>
-    /// El arreglo "dispositions" completo, SOLO si trae más de una tipificación o una estructura
-    /// desconocida (para no perder nada). En el caso normal va en null.
-    /// </summary>
+    // dispositions completo solo si trae más de una
     public string? Dispositions { get; init; }
 
     public string? CamposExtraJson { get; init; }
 
-    /// <summary>
-    /// Campos ref_str_* con el nombre completo que manda CCC (ref_str_CURP, ref_str_CP...).
-    /// Contiene datos personales: nunca escribirlos en logs.
-    /// </summary>
+    // campos ref_str_*, datos personales: no van al log
     public IReadOnlyDictionary<string, string?> DatosLead { get; init; } = new Dictionary<string, string?>();
 }

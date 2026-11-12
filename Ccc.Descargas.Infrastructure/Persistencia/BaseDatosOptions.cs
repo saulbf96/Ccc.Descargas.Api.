@@ -4,17 +4,12 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Sección "BaseDatos". La cadena de conexión con usuario y contraseña NUNCA va en
-/// appsettings.json: en desarrollo va en User Secrets o en appsettings.Development.json
-/// (si es autenticación de Windows, sin contraseña); en el servidor, variable de entorno
-/// del servicio cifrada con DPAPI ("dpapi:...").
-/// </summary>
+// sección BaseDatos, la cadena va en User Secrets o cifrada con DPAPI
 public sealed class BaseDatosOptions
 {
     public const string Seccion = "BaseDatos";
 
-    // set (no init) para que DescifrarCadenaConexion la reemplace ya descifrada
+    // set para reemplazarla descifrada
     [Required]
     public string CadenaConexion { get; set; } = string.Empty;
 
@@ -22,7 +17,7 @@ public sealed class BaseDatosOptions
     public int TimeoutComandoSegundos { get; init; } = 60;
 }
 
-/// <summary>Descifra la cadena de conexión una sola vez, al cargar la configuración.</summary>
+// descifra la cadena de conexión
 internal sealed class DescifrarCadenaConexion : IPostConfigureOptions<BaseDatosOptions>
 {
     public void PostConfigure(string? name, BaseDatosOptions options) =>

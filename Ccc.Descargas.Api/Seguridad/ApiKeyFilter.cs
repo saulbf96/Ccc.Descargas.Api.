@@ -8,29 +8,24 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Api.Seguridad;
 
-/// <summary>
-/// Sección "Seguridad". La ApiKey NUNCA va en appsettings: en desarrollo va en User Secrets
-/// (Seguridad:ApiKey) y en el servidor como variable del servicio cifrada con DPAPI (Seguridad__ApiKey).
-/// </summary>
+// ApiKey: en desarrollo en User Secrets, en el servidor cifrada con DPAPI
 public sealed class SeguridadOptions
 {
     public const string Seccion = "Seguridad";
 
-    // set (no init) para que DescifrarApiKey la reemplace ya descifrada
+    // set para poder reemplazarla ya descifrada
     [Required, MinLength(32)]
     public string ApiKey { get; set; } = string.Empty;
 }
 
-/// <summary>Descifra la ApiKey una sola vez, al cargar la configuración.</summary>
+// descifra la ApiKey al cargar la configuración
 internal sealed class DescifrarApiKey : IPostConfigureOptions<SeguridadOptions>
 {
     public void PostConfigure(string? name, SeguridadOptions options) =>
         options.ApiKey = ProteccionDpapi.DescifrarSiAplica(options.ApiKey, "la ApiKey (Seguridad:ApiKey)");
 }
 
-/// <summary>
-/// Todos los endpoints exigen el encabezado X-Api-Key con la clave configurada; si no, 401.
-/// </summary>
+// todos los endpoints piden X-Api-Key
 internal sealed class ApiKeyFilter(IOptions<SeguridadOptions> options) : IAuthorizationFilter
 {
     public const string Encabezado = "X-Api-Key";
@@ -44,7 +39,7 @@ internal sealed class ApiKeyFilter(IOptions<SeguridadOptions> options) : IAuthor
         }
     }
 
-    // Compara hashes en tiempo constante: no deja adivinar la clave por lo que tarda la respuesta
+    // comparación en tiempo constante
     private static bool SonIguales(string recibida, string esperada) =>
         CryptographicOperations.FixedTimeEquals(
             SHA256.HashData(Encoding.UTF8.GetBytes(recibida)),

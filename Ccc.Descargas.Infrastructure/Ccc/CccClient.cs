@@ -23,7 +23,7 @@ internal sealed class CccClient(
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // conserva Ñ y acentos tal cual
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,   // conserva Ñ y acentos
     };
 
     private const string FormatoFecha = "yyyy-MM-dd HH:mm:ss";
@@ -42,7 +42,7 @@ internal sealed class CccClient(
         }
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            // TaskCanceledException sin que nadie haya cancelado = se agotó el timeout
+            // sin cancelación = timeout
             logger.LogWarning(ex, "Ping a CCC {ClientId} falló por conexión o timeout", cuenta.ClientId);
 
             return new ResultadoPing(cuenta.ClientId, cuenta.Nombre, false, null, "Error de conexión o timeout", cronometro.ElapsedMilliseconds);
@@ -103,10 +103,10 @@ internal sealed class CccClient(
     public async Task<EstatusAgente?> ObtenerEstatusAgenteAsync(
         CuentaCcc cuenta, long userId, DateTime fechaFoto, CancellationToken cancellationToken)
     {
-        // CCC solo acepta UN user_id entero por petición ("The user id must be an integer")
+        // getStatus solo acepta un user_id
         var (statusCode, respuesta) = await EnviarAsync(cuenta, "Agent/getStatus", new { user_id = userId }, cancellationToken);
 
-        // Agente desconectado: CCC responde 400 {"error":"Agent is not online."}. No es falla: no hay foto.
+        // 400 Agent is not online = sin foto
         if (statusCode == 400 && respuesta.Contains("not online", StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -129,7 +129,7 @@ internal sealed class CccClient(
         var (statusCode, respuesta) = await EnviarAsync(cuenta, recurso, data, cancellationToken);
         if (statusCode != 200)
         {
-            // Solo los primeros caracteres: suficiente para diagnosticar, sin volcar datos al log
+            // solo los primeros caracteres
             throw new CccApiException(statusCode, $"CCC respondió HTTP {statusCode}: {respuesta[..Math.Min(respuesta.Length, 200)]}",
                 ocupado: EstaOcupado(statusCode, respuesta));
         }
@@ -137,8 +137,7 @@ internal sealed class CccClient(
         return respuesta;
     }
 
-    // Cada intento espera su turno en el carril de la plataforma. Si CCC está ocupado con una petición de
-    // FUERA de esta aplicación (code 101), suelta el carril, espera y reintenta con un token nuevo.
+    // si CCC está ocupado (101) espera y reintenta
     private async Task<(int StatusCode, string Respuesta)> EnviarAsync(
         CuentaCcc cuenta, string recurso, object data, CancellationToken cancellationToken)
     {
@@ -163,7 +162,7 @@ internal sealed class CccClient(
         }
     }
 
-    // CCC responde 400 {"code":101,"reason":"There is another Transaction in Progress"}
+    // code 101 = otra transacción en curso
     private static bool EstaOcupado(int statusCode, string respuesta)
     {
         if (statusCode != 400)
@@ -196,8 +195,7 @@ internal sealed class CccClient(
         var requestDateTime = timeProvider.GetLocalNow().ToString(FormatoFecha, CultureInfo.InvariantCulture);
         var authToken = CccAuthToken.Calcular(clientId, cuenta.Username, cuenta.SecretKey, dataJson, requestDateTime);
 
-        // CCC espera texto plano con una línea "clave = valor" por parámetro, en UTF-8.
-        // Verificado el 2026-10-28: form-urlencoded responde 401 y latin-1 responde 500.
+        // CCC pide texto plano clave = valor en UTF-8
         var body =
             $"AuthUsername = {cuenta.Username}\r\n" +
             $"AuthToken = {authToken}\r\n" +

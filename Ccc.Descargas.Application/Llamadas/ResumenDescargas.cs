@@ -4,20 +4,14 @@ using Ccc.Descargas.Domain.Cuentas;
 
 namespace Ccc.Descargas.Application.Llamadas;
 
-/// <summary>
-/// Arma el texto de los correos de inicio y fin del día a partir de la bitácora y del avance de cada cuenta.
-/// Sin dependencias (solo datos de entrada) para poder probarlo.
-/// Por cuenta: hasta dónde están descargadas las llamadas (y cuánto atraso lleva), cuántas se bajaron en el
-/// periodo, tramos con error, fotos de agentes y el último día de tiempos cerrado.
-/// </summary>
+// texto de los correos de inicio y fin del día
 public static class ResumenDescargas
 {
     private static readonly CultureInfo Mx = CultureInfo.GetCultureInfo("es-MX");
 
     public sealed record Correo(string Asunto, string Cuerpo, bool HayProblemas);
 
-    /// <param name="limite">Hasta dónde ya deberían estar las llamadas (ahora - margen).</param>
-    /// <param name="atrasoAlerta">Más atraso que esto es un problema.</param>
+    // limite: ahora - margen
     public static Correo Armar(
         string titulo, IReadOnlyList<(CuentaCcc Cuenta, ResumenCuenta Resumen)> cuentas,
         DateTime desde, DateTime hasta, DateTime ahora, DateTime limite, TimeSpan atrasoAlerta, string servidor)

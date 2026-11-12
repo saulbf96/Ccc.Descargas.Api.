@@ -6,7 +6,7 @@ public enum OrigenDescarga
     Manual,       // POST api/descargas o api/agentes
 }
 
-/// <summary>Qué se descargó. Es el TIPO de la bitácora y del marcador de avance.</summary>
+// tipo de descarga
 public enum TipoDescarga
 {
     Llamadas,          // CallHistory/Search
@@ -33,11 +33,7 @@ public static class TiposDescarga
     };
 }
 
-/// <summary>
-/// Resultado de UN intento de descargar un tramo de una cuenta: lo que se guarda en la bitácora
-/// (dbo.TBL_BITACORA_DESCARGAS_CCC) y en el reporte .txt de la cuenta.
-/// Hasta va INCLUIDO (como datetime_to de CCC): de 10:00:00 a 10:00:59.
-/// </summary>
+// resultado de un tramo (Hasta incluido)
 public sealed record RegistroTramo(
     string ClientId,
     string NombreCuenta,
@@ -55,18 +51,18 @@ public sealed record RegistroTramo(
     DateTime Fin,
     string? Mensaje)
 {
-    /// <summary>Milisegundos esperando a CCC (incluye la fila del carril).</summary>
+    // ms esperando a CCC
     public long? MsCcc { get; init; }
 
-    /// <summary>Milisegundos guardando en la BD que NO se enciman con CCC (lo que de verdad atrasa).</summary>
+    // ms guardando en la BD
     public long? MsBd { get; init; }
 }
 
-/// <summary>Marcador de avance de una cuenta y tipo: todo lo anterior a DescargadoHasta ya está.</summary>
+// marcador de avance
 public sealed record AvanceDescarga(
     DateTime DescargadoHasta, int? TamanoTramoSegundos, int ErroresSeguidos, string? UltimoError, DateTime? FechaUltimoError);
 
-/// <summary>Resumen de la bitácora de una cuenta y tipo en un periodo (para los correos).</summary>
+// resumen de bitácora para los correos
 public sealed record ResumenTipo(TipoDescarga Tipo, int TramosOk, int TramosError, long Registros, DateTime? UltimoFin, string? UltimoError);
 
 public sealed record ResumenCuenta(IReadOnlyList<ResumenTipo> Tipos, IReadOnlyDictionary<TipoDescarga, AvanceDescarga> Avance)

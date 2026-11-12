@@ -1,17 +1,13 @@
 namespace Ccc.Descargas.Domain.Agentes;
 
-/// <summary>
-/// Foto en vivo de UN agente (Agent/getStatus): su estado en ese momento, desde cuándo, la llamada en curso
-/// y el lead. Se guarda TODO: los ref_str_* del lead en DatosLeadJson y cualquier campo desconocido en
-/// CamposExtraJson.
-/// </summary>
+// foto de estatus de un agente (Agent/getStatus)
 public sealed record EstatusAgente
 {
-    /// <summary>Hora (de este servidor) en que se tomó la foto; la misma para todos los agentes de una vuelta.</summary>
+    // hora de la foto
     public required DateTime FechaFoto { get; init; }
     public required long UserId { get; init; }
 
-    /// <summary>getStatus no los trae: salen de Agent/getTimes.</summary>
+    // vienen de getTimes
     public string? AgentUsername { get; init; }
     public string? AgentName { get; init; }
 

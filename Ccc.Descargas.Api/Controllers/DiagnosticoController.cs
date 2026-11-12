@@ -7,10 +7,7 @@ namespace Ccc.Descargas.Api.Controllers;
 [Route("api/diagnostico")]
 public sealed class DiagnosticoController(INotificador notificador) : ControllerBase
 {
-    /// <summary>
-    /// Manda un correo de prueba con la configuración actual (Correo:*), para confirmar que los avisos llegan.
-    /// Si falla, regresa el motivo (servidor, puerto, autenticación...).
-    /// </summary>
+    // manda un correo de prueba
     [HttpPost("correo")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]

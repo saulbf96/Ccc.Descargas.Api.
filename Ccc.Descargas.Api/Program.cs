@@ -9,22 +9,21 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// En el servidor corre como Servicio de Windows (herramientas\Instalar-Servicio.ps1);
-// desde Visual Studio o dotnet run no hace nada
+// en el servidor corre como servicio de Windows
 builder.Host.UseWindowsService(opciones => opciones.ServiceName = "CccDescargas");
 
 // Add services to the container.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// Si falta la ApiKey, la app no inicia
+// sin ApiKey no arranca
 builder.Services.AddOptions<SeguridadOptions>()
     .Bind(builder.Configuration.GetSection(SeguridadOptions.Seccion))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 builder.Services.AddSingleton<IPostConfigureOptions<SeguridadOptions>, DescifrarApiKey>();
 
-// Descarga automática casi en tiempo real (tramos de llamadas + fotos de agentes), por turnos en cada plataforma
+// descarga automática
 builder.Services.AddOptions<DescargaOptions>()
     .Bind(builder.Configuration.GetSection(DescargaOptions.Seccion))
     .ValidateDataAnnotations()
@@ -33,7 +32,7 @@ builder.Services.AddOptions<DescargaOptions>()
     .ValidateOnStart();
 builder.Services.AddHostedService<DescargaAutomaticaWorker>();
 
-// Correos de inicio y fin del día (prueba de vida de la descarga)
+// correos de inicio y fin del día
 builder.Services.AddOptions<ResumenDiarioOptions>()
     .Bind(builder.Configuration.GetSection(ResumenDiarioOptions.Seccion))
     .ValidateDataAnnotations()
@@ -42,12 +41,12 @@ builder.Services.AddHostedService<ResumenDiarioWorker>();
 
 builder.Services.AddControllers(opciones => opciones.Filters.Add<ApiKeyFilter>())
     .AddJsonOptions(opciones =>
-        // Los enum salen como texto ("Completada") y no como número (0)
+        // enums como texto
         opciones.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(opciones => opciones.AddDocumentTransformer((documento, _, _) =>
 {
-    // Botón "Authorize" en Swagger para mandar el encabezado X-Api-Key
+    // X-Api-Key en Swagger
     documento.Components ??= new OpenApiComponents();
     documento.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
     documento.Components.SecuritySchemes[ApiKeyFilter.Encabezado] = new OpenApiSecurityScheme

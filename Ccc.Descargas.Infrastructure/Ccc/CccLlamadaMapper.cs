@@ -7,11 +7,7 @@ using Ccc.Descargas.Infrastructure.Persistencia;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Convierte cada elemento de "results" de CallHistory/Search en una Llamada sin perder nada:
-/// campos conocidos -> propiedades, ref_str_* con columna en la tabla de la cuenta -> DatosLead,
-/// dispositions -> Tipificacion, y cualquier otro campo (ej. un ref_str_ nuevo) -> CamposExtraJson.
-/// </summary>
+// convierte results de CallHistory/Search a Llamada
 internal static partial class CccLlamadaMapper
 {
     private const string FormatoFecha = "yyyy-MM-dd HH:mm:ss";
@@ -89,11 +85,7 @@ internal static partial class CccLlamadaMapper
         };
     }
 
-    /// <summary>
-    /// Algunas listas traen la fecha de carga en el nombre del campo (ref_str_PRED_28102026).
-    /// La fecha solo indica de qué lista viene, así que todas caen en la misma columna (ref_str_PRED).
-    /// Solo se quita si los 8 dígitos finales son una fecha válida DDMMAAAA.
-    /// </summary>
+    // quita la fecha del nombre: ref_str_PRED_28102026 -> ref_str_PRED
     internal static string NombreColumna(string campo)
     {
         var coincidencia = SufijoFecha().Match(campo);
@@ -106,11 +98,7 @@ internal static partial class CccLlamadaMapper
     [GeneratedRegex(@"^(ref_str_.+)_(\d{8})$")]
     private static partial Regex SufijoFecha();
 
-    /// <summary>
-    /// "dispositions" viene así: [{"175981": [{"disp_id": 91751, "name": "...", "text": "...", ...}]}].
-    /// Lo normal es una sola tipificación: va en columnas. Si trae más de una o una estructura distinta,
-    /// también se regresa el arreglo completo para no perder nada.
-    /// </summary>
+    // lee dispositions
     private static (Tipificacion? Tipificacion, string? Completo) LeerTipificacion(JsonElement json)
     {
         if (!json.TryGetProperty("dispositions", out var arreglo) || arreglo.ValueKind == JsonValueKind.Null)
@@ -151,16 +139,16 @@ internal static partial class CccLlamadaMapper
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
-            return (null, arreglo.GetRawText());   // estructura que no conocemos: se guarda tal cual
+            return (null, arreglo.GetRawText());   // estructura desconocida
         }
     }
 
-    // Los vacíos se mandan tal cual: el SP los convierte a NULL (una sola regla, en la BD)
+    // los vacíos los convierte a NULL el SP
     private static string? Texto(JsonElement valor) => valor.ValueKind switch
     {
         JsonValueKind.Null or JsonValueKind.Undefined => null,
         JsonValueKind.String => valor.GetString(),
-        _ => valor.GetRawText(),   // números o booleanos en un campo de texto
+        _ => valor.GetRawText(),
     };
 
     private static string? Texto(JsonElement json, string campo) =>
@@ -174,7 +162,7 @@ internal static partial class CccLlamadaMapper
 
     private static decimal? Decimal(JsonElement json, string campo)
     {
-        var texto = Texto(json, campo);   // CCC manda los decimales como texto: "0.0000"
+        var texto = Texto(json, campo);   // CCC manda decimales como texto
         return string.IsNullOrWhiteSpace(texto) ? null : decimal.Parse(texto, NumberStyles.Number, CultureInfo.InvariantCulture);
     }
 

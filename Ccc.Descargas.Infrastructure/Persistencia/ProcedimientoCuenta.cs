@@ -4,10 +4,7 @@ using Microsoft.Data.SqlClient;
 
 namespace Ccc.Descargas.Infrastructure.Persistencia;
 
-/// <summary>
-/// Llama al SP ÚNICO de una cuenta (dbo.USP_CCC_&lt;cuenta&gt;) con su @OPCION. El nombre del SP sale de la lista
-/// fija de cuentas (TablasCuenta), nunca de un texto recibido, y todos los valores van como parámetros tipados.
-/// </summary>
+// llama al SP de la cuenta con su @OPCION
 internal static class ProcedimientoCuenta
 {
     public const byte GuardarLlamadas = 1;
@@ -50,7 +47,7 @@ internal static class ProcedimientoCuenta
         }
     }
 
-    /// <summary>Lee la primera fila: (Insertadas, Actualizadas).</summary>
+    // primera fila: insertadas, actualizadas
     public static async Task<(int, int)> LeerConteosAsync(SqlDataReader lector, CancellationToken cancellationToken)
     {
         await lector.ReadAsync(cancellationToken);
@@ -59,7 +56,7 @@ internal static class ProcedimientoCuenta
 
     public static object Nulo(object? valor) => valor ?? DBNull.Value;
 
-    // Application no conoce SqlClient: se traduce a un error de BD con un mensaje claro
+    // error de SQL a error de BD
     private static ErrorBaseDatosException Traducir(SqlException ex)
     {
         var motivo = ex.Number switch

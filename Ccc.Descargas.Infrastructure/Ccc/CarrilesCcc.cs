@@ -2,12 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Un "carril" por plataforma de CCC (api.ccc.uno = CCC1, app2.ccc.uno = CCC2): cada plataforma atiende UNA
-/// petición a la vez, aunque sean de cuentas distintas (comprobado: mientras 2520 descargaba, 2812 recibía
-/// code 101). Toda petición (llamadas, agentes, ping, manual o automática) espera su turno aquí, así nunca
-/// chocamos entre nosotros. Singleton: compartido por todas las instancias de CccClient.
-/// </summary>
+// un carril por plataforma: CCC atiende una petición a la vez
 internal sealed class CarrilesCcc
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> carriles = new(StringComparer.OrdinalIgnoreCase);

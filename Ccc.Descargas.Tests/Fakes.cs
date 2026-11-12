@@ -7,7 +7,7 @@ using Ccc.Descargas.Domain.Llamadas;
 
 namespace Ccc.Descargas.Tests;
 
-/// <summary>Dobles de prueba: sustituyen a CCC, la BD y los reportes para probar sin red ni SQL.</summary>
+// fakes para probar sin red ni SQL
 internal static class Datos
 {
     public static readonly CuentaCcc Consu = new("2812", "CCC1 - CONSU 2812", "api.ccc.uno");
@@ -36,14 +36,14 @@ internal sealed class CuentasFake(params CuentaCcc[] cuentas) : ICuentaCccReposi
     public CuentaCcc? ObtenerPorId(string clientId) => cuentas.FirstOrDefault(c => c.ClientId == clientId);
 }
 
-/// <summary>CCC de mentira: cada llamada a BuscarLlamadasAsync regresa (o lanza) lo siguiente de la lista.</summary>
+// CCC fake
 internal sealed class CccFake(params Func<IReadOnlyList<Llamada>>[] respuestas) : ICccClient
 {
     private int siguiente;
 
     public int Consultas => siguiente;
 
-    /// <summary>Los rangos que se pidieron (desde, hasta, página).</summary>
+    // rangos pedidos
     public List<(DateTime Desde, DateTime Hasta, int Pagina)> Pedidos { get; } = [];
 
     public IReadOnlyList<TiempoAgente> Tiempos { get; init; } = [];
@@ -97,7 +97,7 @@ internal sealed class AgentesFake : IAgenteRepository
     }
 }
 
-/// <summary>Bitácora en memoria que mueve el avance igual que el SP (@OPCION 4).</summary>
+// bitácora en memoria
 internal sealed class BitacoraFake(bool falla = false) : IBitacoraDescargas
 {
     public List<(RegistroTramo Registro, bool MoverAvance)> Registros { get; } = [];
@@ -145,7 +145,7 @@ internal sealed class ReporteFake : IReporteDescargas
     public Task EscribirAvisoAsync(string? clientId, string mensaje, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
-/// <summary>Reloj fijo para las pruebas.</summary>
+// reloj fijo
 internal sealed class RelojFijo(DateTime ahora) : TimeProvider
 {
     public DateTime Ahora { get; set; } = ahora;
