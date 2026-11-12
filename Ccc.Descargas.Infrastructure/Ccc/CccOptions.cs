@@ -2,16 +2,20 @@
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Sección "Ccc" de la configuración. Los datos públicos van en appsettings.json;
-/// las SecretKey van en User Secrets (desarrollo) o variables de entorno (servidor).
-/// </summary>
+// sección Ccc, las SecretKey van en User Secrets o variables de entorno
 public sealed class CccOptions
 {
     public const string Seccion = "Ccc";
 
     [Range(5, 600)]
     public int TimeoutSegundos { get; init; } = 120;
+
+    // reintentos cuando CCC está ocupado (101)
+    [Range(0, 60)]
+    public int ReintentosOcupado { get; init; } = 10;
+
+    [Range(1, 600)]
+    public int EsperaOcupadoSegundos { get; init; } = 30;
 
     [MinLength(1)]
     public Dictionary<string, CuentaCccOptions> Cuentas { get; init; } = [];
@@ -30,7 +34,7 @@ public sealed class CuentaCccOptions
 
    
 
-    // set (no init) para que DescifrarSecretKeys pueda reemplazarla ya descifrada
+    // set para reemplazarla descifrada
     [Required]
     public string SecretKey { get; set; } = string.Empty;
 

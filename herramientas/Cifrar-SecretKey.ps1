@@ -1,6 +1,6 @@
 ﻿<#
   Cifra una SecretKey de CCC con DPAPI para ESTE servidor.
-  Ejecutar EN el servidor IIS donde corre la API (en otra máquina no se podrá descifrar).
+  Ejecutar EN el servidor donde corre la API. Sirve para cambiar UNA clave (ej. si CCC la rota); la primera instalación la hace Instalar-Servicio.ps1 (en otra máquina no se podrá descifrar).
   La clave se pide oculta, así no queda en el historial de PowerShell.
 #>
 Add-Type -AssemblyName System.Security

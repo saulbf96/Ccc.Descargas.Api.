@@ -12,6 +12,7 @@ public sealed record ResultadoPing(
     string Mensaje,
     long DuracionMs
 
+
     );
 
 

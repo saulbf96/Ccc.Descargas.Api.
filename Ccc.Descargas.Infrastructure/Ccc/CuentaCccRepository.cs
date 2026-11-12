@@ -4,23 +4,22 @@ using Microsoft.Extensions.Options;
 
 namespace Ccc.Descargas.Infrastructure.Ccc;
 
-/// <summary>
-/// Por ahora las cuentas salen de la configuración. Si después viven en BD,
-/// solo se cambia esta clase; Application no se entera.
-/// </summary>
-/// 
+// cuentas desde la configuración
 
 
 internal sealed class CuentaCccRepository(IOptions<CccOptions> options) : ICuentaCccRepository
 {
     public IReadOnlyList<CuentaCcc> ObtenerTodas() =>
         options.Value.Cuentas
-            .Select(par => new CuentaCcc(par.Key, par.Value.Nombre))
+            .Select(par => Crear(par.Key, par.Value))
             .ToList();
 
     public CuentaCcc? ObtenerPorId(string clientId) =>
         options.Value.Cuentas.TryGetValue(clientId, out var cuenta)
-            ? new CuentaCcc(clientId, cuenta.Nombre)
+            ? Crear(clientId, cuenta)
             : null;
+
+    private static CuentaCcc Crear(string clientId, CuentaCccOptions cuenta) =>
+        new(clientId, cuenta.Nombre, new Uri(cuenta.BaseUrl).Host);
 }
 

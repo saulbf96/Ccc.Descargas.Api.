@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,15 +7,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.18.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.14" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.14" />
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.14" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Ccc.Descargas.Application\Ccc.Descargas.Application.csproj" />
     <ProjectReference Include="..\Ccc.Descargas.Domain\Ccc.Descargas.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Solo el proyecto de pruebas ve las clases internal -->
+    <InternalsVisibleTo Include="Ccc.Descargas.Tests" />
   </ItemGroup>
 
 </Project>
