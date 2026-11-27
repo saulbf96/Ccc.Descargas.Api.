@@ -11,14 +11,17 @@ public static class ResumenDescargas
 
     public sealed record Correo(string Asunto, string Cuerpo, bool HayProblemas);
 
-    // limite: ahora - margen
+    // limite: ahora - margen; huecos: lo atrasado por recuperar de cada cuenta
     public static Correo Armar(
         string titulo, IReadOnlyList<(CuentaCcc Cuenta, ResumenCuenta Resumen)> cuentas,
-        DateTime desde, DateTime hasta, DateTime ahora, DateTime limite, TimeSpan atrasoAlerta, string servidor)
+        DateTime desde, DateTime hasta, DateTime ahora, DateTime limite, TimeSpan atrasoAlerta, string servidor,
+        IReadOnlyDictionary<string, IReadOnlyList<HuecoDescarga>>? huecos = null)
     {
         var cuerpo = new StringBuilder();
         var detalle = new StringBuilder();
+        var recuperacion = new StringBuilder();
         var problemas = 0;
+        var recuperando = 0;
 
         foreach (var (cuenta, resumen) in cuentas)
         {
@@ -50,7 +53,19 @@ public static class ResumenDescargas
                 ? $"tiempos cerrados hasta el {t.DescargadoHasta.AddDays(-1):dd/MM}"
                 : "tiempos: ningún día cerrado";
 
-            cuerpo.AppendLine($"{cuenta.ClientId} {cuenta.Nombre}: {avanceTexto} | {(llamadas?.Registros ?? 0).ToString("N0", Mx)} llamadas " +
+            var pendientes = huecos is not null && huecos.TryGetValue(cuenta.ClientId, out var h) ? h : [];
+            var huecosTexto = "sin atrasos por recuperar";
+            if (pendientes.Count > 0)
+            {
+                recuperando++;
+                var total = TimeSpan.FromTicks(pendientes.Sum(x => (x.Hasta - x.Desde).Ticks));
+                var masViejo = pendientes.Min(x => x.Desde);
+                huecosTexto = $"por recuperar {Duracion(total)} en {pendientes.Count} hueco(s)";
+                recuperacion.AppendLine($"  - {cuenta.ClientId} {cuenta.Nombre}: {Duracion(total)} en {pendientes.Count} hueco(s), " +
+                                        $"el más viejo desde el {masViejo:dd/MM HH:mm}");
+            }
+
+            cuerpo.AppendLine($"{cuenta.ClientId} {cuenta.Nombre}: {avanceTexto} | {huecosTexto} | {(llamadas?.Registros ?? 0).ToString("N0", Mx)} llamadas " +
                               $"en {(llamadas?.TramosOk ?? 0).ToString("N0", Mx)} tramos | {(estatus?.Registros ?? 0).ToString("N0", Mx)} fotos de agentes | " +
                               $"{cierre} | {errores} con error");
 
@@ -65,12 +80,21 @@ public static class ResumenDescargas
         }
 
         var hayProblemas = problemas > 0;
-        var asunto = $"[{(hayProblemas ? "REVISAR" : "OK")}] {titulo}" + (hayProblemas ? $": {problemas} problema(s)" : "");
+        var asunto = $"[{(hayProblemas ? "REVISAR" : "OK")}] {titulo}" + (hayProblemas ? $": {problemas} problema(s)" : "") +
+                     (huecos is null ? "" : recuperando > 0 ? $" | {recuperando} cuenta(s) recuperando" : " | todas al día");
 
         var texto = new StringBuilder();
         texto.AppendLine($"Servidor: {servidor}");
         texto.AppendLine($"Periodo: {desde:dd/MM/yyyy HH:mm} a {hasta:dd/MM/yyyy HH:mm}   |   Generado: {ahora:dd/MM/yyyy HH:mm}");
         texto.AppendLine();
+        if (huecos is not null)
+        {
+            texto.AppendLine(recuperando == 0
+                ? "Estado: todas las cuentas al día, sin atrasos por recuperar."
+                : $"Estado: {recuperando} de {cuentas.Count} cuenta(s) con atrasos por recuperar (se recuperan solas, del más viejo al más nuevo):");
+            texto.Append(recuperacion);
+            texto.AppendLine();
+        }
         texto.Append(cuerpo);
         if (detalle.Length > 0)
         {

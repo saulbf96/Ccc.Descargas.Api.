@@ -30,6 +30,7 @@ builder.Services.AddOptions<DescargaOptions>()
     .Validate(o => o.TramoMinimoSegundos <= o.TramoInicialSegundos && o.TramoInicialSegundos <= o.TramoMaximoSegundos,
         "DescargaAutomatica: debe cumplirse TramoMinimoSegundos <= TramoInicialSegundos <= TramoMaximoSegundos.")
     .ValidateOnStart();
+builder.Services.AddSingleton<EstadoDescargas>();
 builder.Services.AddHostedService<DescargaAutomaticaWorker>();
 
 // correos de inicio y fin del día

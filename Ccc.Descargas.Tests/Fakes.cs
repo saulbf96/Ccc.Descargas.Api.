@@ -79,6 +79,70 @@ internal sealed class LlamadasFake : ILlamadaRepository
     }
 }
 
+// guardado que termina cuando la prueba lo indica
+internal sealed class GuardadoControlado : ILlamadaRepository
+{
+    private readonly List<TaskCompletionSource<(int, int)>> pendientes = [];
+    private readonly List<int> cantidades = [];
+    private readonly Lock candado = new();
+    private bool terminarAlLlegar;
+
+    public Task<(int Insertadas, int Actualizadas)> GuardarAsync(IReadOnlyList<Llamada> llamadas, CancellationToken cancellationToken)
+    {
+        var tcs = new TaskCompletionSource<(int, int)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (candado)
+        {
+            pendientes.Add(tcs);
+            cantidades.Add(llamadas.Count);
+            if (terminarAlLlegar)
+            {
+                tcs.TrySetResult((llamadas.Count, 0));
+            }
+        }
+
+        return tcs.Task;
+    }
+
+    public async Task EsperarLlamadasAsync(int cuantas)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            lock (candado)
+            {
+                if (pendientes.Count >= cuantas)
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException("no llegaron los guardados esperados");
+    }
+
+    public void Fallar(int indice, Exception ex)
+    {
+        lock (candado)
+        {
+            pendientes[indice].TrySetException(ex);
+        }
+    }
+
+    // termina los pendientes y los que lleguen después
+    public void TerminarTodos()
+    {
+        lock (candado)
+        {
+            terminarAlLlegar = true;
+            for (var i = 0; i < pendientes.Count; i++)
+            {
+                pendientes[i].TrySetResult((cantidades[i], 0));
+            }
+        }
+    }
+}
+
 internal sealed class AgentesFake : IAgenteRepository
 {
     public List<EstatusAgente> Fotos { get; } = [];
@@ -112,7 +176,24 @@ internal sealed class BitacoraFake(bool falla = false) : IBitacoraDescargas
         }
 
         Registros.Add((registro, moverAvance));
-        if (moverAvance)
+        if (moverAvance && registro.FinHueco is { } finHueco)
+        {
+            // recuperación: avanza el hueco y lo borra al terminarlo
+            var i = Huecos.FindIndex(h => h.ClientId == registro.ClientId && h.Hueco.Hasta == finHueco);
+            if (registro.Exitosa && i >= 0)
+            {
+                var nuevo = Huecos[i].Hueco with { Desde = registro.Hasta.AddSeconds(1), TamanoTramoSegundos = registro.TamanoTramoSegundos };
+                if (nuevo.Desde >= nuevo.Hasta)
+                {
+                    Huecos.RemoveAt(i);
+                }
+                else
+                {
+                    Huecos[i] = (registro.ClientId, nuevo);
+                }
+            }
+        }
+        else if (moverAvance)
         {
             var llave = (registro.ClientId, registro.Tipo);
             Avance.TryGetValue(llave, out var actual);
@@ -130,6 +211,61 @@ internal sealed class BitacoraFake(bool falla = false) : IBitacoraDescargas
 
     public Task<ResumenCuenta> ObtenerResumenAsync(string clientId, DateTime desde, DateTime hasta, CancellationToken cancellationToken) =>
         throw new NotImplementedException();
+
+    public List<(string ClientId, HuecoDescarga Hueco)> Huecos { get; } = [];
+
+    // misma regla que @OPCION 7
+    public Task<bool> SaltarAsync(string clientId, DateTime desde, DateTime hasta, int? tamanoTramoSegundos, CancellationToken cancellationToken)
+    {
+        var llave = (clientId, TipoDescarga.Llamadas);
+        var existe = Avance.TryGetValue(llave, out var actual);
+        if (hasta <= desde || (existe && actual!.DescargadoHasta != desde))
+        {
+            return Task.FromResult(false);
+        }
+
+        Avance[llave] = existe ? actual! with { DescargadoHasta = hasta } : new AvanceDescarga(hasta, tamanoTramoSegundos, 0, null, null);
+        var i = Huecos.FindIndex(h => h.ClientId == clientId && h.Hueco.Hasta == desde);
+        if (i >= 0)
+        {
+            Huecos[i] = (clientId, Huecos[i].Hueco with { Hasta = hasta });   // se junta con el anterior
+        }
+        else
+        {
+            Huecos.Add((clientId, new HuecoDescarga(desde, hasta, tamanoTramoSegundos)));
+        }
+
+        return Task.FromResult(true);
+    }
+
+    public Task<IReadOnlyList<HuecoDescarga>> ObtenerHuecosAsync(string clientId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<HuecoDescarga>>(Huecos.Where(h => h.ClientId == clientId).Select(h => h.Hueco)
+            .OrderBy(h => h.Desde).ToList());
+
+    // misma regla que @OPCION 9
+    public Task<IReadOnlyList<RangoTramos>> ObtenerTramosEnVivoAsync(string clientId, DateTime desde, DateTime hasta, int ventanaMinutos,
+        CancellationToken cancellationToken)
+    {
+        var tramos = Registros.Select(r => r.Registro)
+            .Where(r => r.ClientId == clientId && r.Tipo == TipoDescarga.Llamadas && r.Exitosa && r.Origen == OrigenDescarga.Automatica
+                        && r.Desde >= desde && r.Desde < hasta && !(r.Mensaje?.StartsWith("Repaso", StringComparison.Ordinal) ?? false)
+                        && (r.Fin - r.Hasta).TotalMinutes < ventanaMinutos)
+            .OrderBy(r => r.Desde).ThenBy(r => r.Hasta);
+        var rangos = new List<RangoTramos>();
+        foreach (var t in tramos)
+        {
+            if (rangos.Count > 0 && t.Desde.AddSeconds(-1) <= rangos[^1].Hasta)
+            {
+                rangos[^1] = rangos[^1] with { Hasta = t.Hasta > rangos[^1].Hasta ? t.Hasta : rangos[^1].Hasta };
+            }
+            else
+            {
+                rangos.Add(new RangoTramos(t.Desde, t.Hasta));
+            }
+        }
+
+        return Task.FromResult<IReadOnlyList<RangoTramos>>(rangos.Select(r => r.Hasta >= hasta ? r with { Hasta = hasta.AddSeconds(-1) } : r).ToList());
+    }
 }
 
 internal sealed class ReporteFake : IReporteDescargas

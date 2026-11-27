@@ -28,4 +28,10 @@ public sealed record ResultadoTurno(
 {
     // lo que falta, cero = al día
     public TimeSpan Atraso => DescargadoHasta >= Limite ? TimeSpan.Zero : Limite - DescargadoHasta;
+
+    // si el frente en vivo saltó: desde dónde quedó el hueco por recuperar
+    public DateTime? SaltoDesde { get; init; }
 }
+
+// lo que avanzó la recuperación en un turno y lo que falta
+public sealed record ResultadoRecuperacion(ResultadoTurno Turno, int Huecos, TimeSpan Pendiente);

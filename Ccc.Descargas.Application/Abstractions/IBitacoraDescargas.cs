@@ -12,6 +12,16 @@ public interface IBitacoraDescargas
     Task<AvanceDescarga?> ObtenerAvanceAsync(string clientId, TipoDescarga tipo, CancellationToken cancellationToken);
 
     Task<ResumenCuenta> ObtenerResumenAsync(string clientId, DateTime desde, DateTime hasta, CancellationToken cancellationToken);
+
+    // el marcador de llamadas pasa de desde a hasta y [desde, hasta) queda como hueco; false si el marcador ya no estaba en desde
+    Task<bool> SaltarAsync(string clientId, DateTime desde, DateTime hasta, int? tamanoTramoSegundos, CancellationToken cancellationToken);
+
+    // huecos de llamadas por recuperar, del más viejo al más nuevo
+    Task<IReadOnlyList<HuecoDescarga>> ObtenerHuecosAsync(string clientId, CancellationToken cancellationToken);
+
+    // tramos de [desde, hasta) bajados a menos de ventanaMinutos de su hora, juntos en rangos continuos
+    Task<IReadOnlyList<RangoTramos>> ObtenerTramosEnVivoAsync(string clientId, DateTime desde, DateTime hasta, int ventanaMinutos,
+        CancellationToken cancellationToken);
 }
 
 // reporte .txt por cuenta y día

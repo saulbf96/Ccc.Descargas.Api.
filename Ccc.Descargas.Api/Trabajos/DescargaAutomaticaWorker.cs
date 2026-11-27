@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Ccc.Descargas.Application.Abstractions;
 using Ccc.Descargas.Application.Agentes;
 using Ccc.Descargas.Application.Llamadas;
@@ -13,12 +14,19 @@ internal sealed class DescargaAutomaticaWorker(
     IOptions<DescargaOptions> options,
     IReporteDescargas reporte,
     INotificador notificador,
+    EstadoDescargas estadoDescargas,
     TimeProvider timeProvider,
     ILogger<DescargaAutomaticaWorker> logger) : BackgroundService
 {
     // último correo por cuenta y motivo
     private readonly Dictionary<(string ClientId, string Motivo), DateTime> ultimosCorreos = [];
     private readonly Lock candadoCorreos = new();
+
+    // estado de cada cuenta, para avisar cuando todas queden al día
+    private readonly ConcurrentDictionary<string, EstadoCuenta> estados = new();
+    private readonly Lock candadoAlDia = new();
+    private bool avisoTodasAlDia;
+    private int totalCuentas;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -34,9 +42,15 @@ internal sealed class DescargaAutomaticaWorker(
                     $"llamadas hasta ahora - {o.MargenMinutos} min, fotos de agentes cada {o.MinutosEntreFotosAgentes} min.";
         logger.LogInformation("{Texto}", texto);
         await reporte.EscribirAvisoAsync(null, texto, stoppingToken);
+        totalCuentas = todas.Count;
+
+        // correo de arranque con cómo quedó cada cuenta, aparte para no frenar la descarga
+        var correoInicio = EnviarEstadoAsync("La descarga automática inició",
+            $"{texto}\nLo que vaya más de {o.UmbralSaltoMinutos} min atrasado salta a la hora actual y se recupera solo, aparte.",
+            TimeSpan.FromMinutes(3), stoppingToken);
 
         // una tarea por cuenta, las peticiones a CCC hacen fila por plataforma
-        await Task.WhenAll(todas.Select(c => CorrerCuentaAsync(c, stoppingToken)));
+        await Task.WhenAll(todas.Select(c => CorrerCuentaAsync(c, stoppingToken)).Append(correoInicio));
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -50,22 +64,87 @@ internal sealed class DescargaAutomaticaWorker(
         // al detenerse queda en el reporte
         var mensaje = $"La aplicación se detuvo en {Environment.MachineName} a las {Ahora():HH:mm}. " +
                       "Al volver a arrancar seguirá desde donde se quedó cada cuenta.";
-        using var limite = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
+            using var limite = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await reporte.EscribirAvisoAsync(null, mensaje, limite.Token);
-            await notificador.EnviarAsync("La descarga automática se detuvo", mensaje, limite.Token);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "No se pudo avisar que la aplicación se detuvo");
+            logger.LogWarning(ex, "No se pudo escribir en el reporte que la aplicación se detuvo");
         }
+
+        await EnviarEstadoAsync("La descarga automática se detuvo", mensaje, TimeSpan.FromSeconds(15), CancellationToken.None);
+    }
+
+    // correo con el estado de todas las cuentas; si la BD no responde a tiempo se manda solo el texto
+    private async Task EnviarEstadoAsync(string titulo, string texto, TimeSpan espera, CancellationToken cancellationToken)
+    {
+        using var limite = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limite.CancelAfter(espera);
+        var ahora = Ahora();
+        string asunto, cuerpo;
+        try
+        {
+            var correo = await estadoDescargas.ArmarAsync(titulo, ahora.Date, ahora, limite.Token);
+            asunto = correo.Asunto;
+            cuerpo = $"{texto}\n\n{correo.Cuerpo}";
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "No se pudo armar el estado de las cuentas para el correo: {Titulo}", titulo);
+            asunto = $"[REVISAR] {titulo}";
+            cuerpo = $"{texto}\n\nNo se pudo leer el estado de las cuentas en la base de datos: {ex.Message}";
+        }
+
+        try
+        {
+            using var envio = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await notificador.EnviarAsync(asunto, cuerpo, envio.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "No se pudo mandar el correo: {Titulo}", titulo);
+        }
+    }
+
+    // un solo correo cuando todas quedan al día; se vuelve a armar si alguna se atrasa de verdad
+    private async Task RevisarTodasAlDiaAsync(CancellationToken cancellationToken)
+    {
+        var o = options.Value;
+        lock (candadoAlDia)
+        {
+            var todasAlDia = estados.Count == totalCuentas && estados.Values.All(e => e.AlDia && e.TieneHuecos == false);
+            if (!todasAlDia)
+            {
+                if (avisoTodasAlDia && estados.Values.Any(e => e.TieneHuecos == true || e.Atraso > TimeSpan.FromMinutes(o.MinutosAtrasoAlerta)))
+                {
+                    avisoTodasAlDia = false;
+                }
+
+                return;
+            }
+
+            if (avisoTodasAlDia)
+            {
+                return;
+            }
+
+            avisoTodasAlDia = true;
+        }
+
+        logger.LogInformation("Todas las cuentas quedaron al día, sin atrasos por recuperar");
+        await reporte.EscribirAvisoAsync(null, "Todas las cuentas quedaron al día, sin atrasos por recuperar.", cancellationToken);
+        await EnviarEstadoAsync("Todas las cuentas al día",
+            $"A las {Ahora():HH:mm} todas las cuentas quedaron al día y sin atrasos por recuperar.",
+            TimeSpan.FromMinutes(3), cancellationToken);
     }
 
     private async Task CorrerCuentaAsync(CuentaCcc cuenta, CancellationToken cancellationToken)
     {
         var o = options.Value;
         var estado = new EstadoCuenta();
+        estados[cuenta.ClientId] = estado;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -73,6 +152,7 @@ internal sealed class DescargaAutomaticaWorker(
             try
             {
                 hayPendientes = await TurnoAsync(cuenta, estado, cancellationToken);
+                await RevisarTodasAlDiaAsync(cancellationToken);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
@@ -118,9 +198,19 @@ internal sealed class DescargaAutomaticaWorker(
             await CerrarDiaAsync(cuenta, dia, estado, agentes, llamadas, cancellationToken);
         }
 
-        // 3. llamadas por tramos
+        // 3. llamadas en vivo por tramos (si va muy atrasada salta a la hora actual y lo atrasado queda como hueco)
         var limite = Ahora().AddMinutes(-o.MargenMinutos);
         var turno = await llamadas.AvanzarAsync(cuenta, limite, cancellationToken);
+        estado.Atraso = turno.Atraso;
+        estado.AlDia = turno.Error is null && turno.Atraso <= TimeSpan.FromMinutes(o.MargenMinutos);
+        if (turno.SaltoDesde is { } saltoDesde)
+        {
+            estado.TieneHuecos = true;
+            await AvisarAsync(cuenta, "recuperación", $"La cuenta {cuenta.ClientId} {cuenta.Nombre} iba atrasada desde el " +
+                $"{saltoDesde:dd/MM HH:mm}. Las llamadas en vivo siguen a la par desde las {limite:dd/MM HH:mm} y lo atrasado " +
+                $"({ResumenDescargas.Duracion(limite - saltoDesde)}) se recupera solo, aparte.", cancellationToken);
+        }
+
         if (turno.Tramos > 0)
         {
             logger.LogInformation("CCC {ClientId}: {Tramos} tramo(s), {Llamadas} llamadas; descargado hasta {Hasta:dd/MM HH:mm:ss} (atraso {Atraso})",
@@ -141,17 +231,57 @@ internal sealed class DescargaAutomaticaWorker(
                 $"(descargado hasta {turno.DescargadoHasta:dd/MM HH:mm}). Se sigue descargando.", cancellationToken);
         }
 
-        // si hubo error no se repite de inmediato
-        return turno.Error is null && turno.Atraso > TimeSpan.FromSeconds(o.TramoMinimoSegundos);
+        var vivoPendiente = turno.Error is null && turno.Atraso > TimeSpan.FromSeconds(o.TramoMinimoSegundos);
+        if (vivoPendiente || turno.Error is not null)
+        {
+            return vivoPendiente;   // el vivo va primero
+        }
+
+        // 4. con el vivo al día, lo que sobra del turno es para recuperar huecos
+        var recuperacion = await llamadas.RecuperarAsync(cuenta, cancellationToken);
+        estado.TieneHuecos = recuperacion is not null;
+        if (recuperacion is null)
+        {
+            if (estado.Recuperando)
+            {
+                estado.Recuperando = false;
+                logger.LogInformation("CCC {ClientId}: terminó de recuperar lo atrasado", cuenta.ClientId);
+                var aviso = $"La cuenta {cuenta.ClientId} {cuenta.Nombre} terminó de recuperar lo atrasado y va al día " +
+                            $"(llamadas descargadas hasta las {turno.DescargadoHasta:dd/MM HH:mm}).";
+                await reporte.EscribirAvisoAsync(cuenta.ClientId, aviso, cancellationToken);
+                await notificador.EnviarAsync($"[OK] Descarga CCC {cuenta.ClientId}: terminó de recuperar lo atrasado",
+                    $"Servidor: {Environment.MachineName}\nHora: {Ahora():dd/MM/yyyy HH:mm}\n\n{aviso}", cancellationToken);
+            }
+
+            return false;
+        }
+
+        estado.Recuperando = true;
+        var rec = recuperacion.Turno;
+        if (rec.Tramos > 0)
+        {
+            logger.LogInformation("CCC {ClientId} recuperación: {Tramos} tramo(s), {Llamadas} llamadas; va en {Hasta:dd/MM HH:mm:ss}, faltan {Pendiente} en {Huecos} hueco(s)",
+                cuenta.ClientId, rec.Tramos, rec.Llamadas, rec.DescargadoHasta, ResumenDescargas.Duracion(recuperacion.Pendiente), recuperacion.Huecos);
+        }
+
+        if (rec.Error is { } errorRecuperacion)
+        {
+            await AvisarAsync(cuenta, "recuperación con error",
+                $"Falló el tramo de recuperación {errorRecuperacion.Desde:dd/MM HH:mm:ss}-{errorRecuperacion.Hasta:HH:mm:ss} de " +
+                $"{cuenta.ClientId} {cuenta.Nombre}: {errorRecuperacion.Mensaje}\nSe reintenta solo; el hueco no se movió.", cancellationToken);
+            return false;
+        }
+
+        return true;
     }
 
-    // cierra un día: si es ayer primero el repaso de llamadas y luego los tiempos
+    // cierra un día: primero el repaso de las llamadas que se bajaron en vivo y luego los tiempos
     private async Task CerrarDiaAsync(CuentaCcc cuenta, DateOnly dia, EstadoCuenta estado,
         DescargarAgentesService agentes, DescargarLlamadasService llamadas, CancellationToken cancellationToken)
     {
         var o = options.Value;
         // si el repaso ya salió no se repite
-        if (o.RepasarDiaAnterior && dia == DateOnly.FromDateTime(Ahora()).AddDays(-1) && estado.DiaRepasado != dia)
+        if (o.RepasarDiaAnterior && estado.DiaRepasado != dia)
         {
             if (estado.UltimoRepasoFallido is { } fallo && Ahora() - fallo < EsperaTrasRepasoFallido)
             {
@@ -161,7 +291,7 @@ internal sealed class DescargaAutomaticaWorker(
             var repaso = await llamadas.RepasarDiaAsync(cuenta, dia, cancellationToken);
             if (repaso is null)
             {
-                return;   // la normal todavía no pasa la medianoche
+                return;   // el día todavía no está todo descargado (vivo antes de medianoche o hueco pendiente)
             }
 
             if (repaso.TramosConError > 0)
@@ -195,6 +325,17 @@ internal sealed class DescargaAutomaticaWorker(
         public DateTime? UltimoRepasoFallido { get; set; }
 
         public DateOnly? DiaRepasado { get; set; }
+
+        // tiene huecos por recuperar (para avisar cuando termine)
+        public bool Recuperando { get; set; }
+
+        // vivo al día y sin error en el último turno
+        public bool AlDia { get; set; }
+
+        public TimeSpan Atraso { get; set; }
+
+        // null = todavía no se sabe (no se ha revisado la recuperación)
+        public bool? TieneHuecos { get; set; }
     }
 
     private async Task AvisarAsync(CuentaCcc cuenta, string motivo, string mensaje, CancellationToken cancellationToken)

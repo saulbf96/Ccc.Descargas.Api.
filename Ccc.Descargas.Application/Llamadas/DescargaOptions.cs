@@ -23,9 +23,9 @@ public sealed class DescargaOptions
     [Range(1, 3600)]
     public int TramoMaximoSegundos { get; init; } = 900;
 
-    // llamadas por tramo, menos de 1000 para que quepa en una página
+    // llamadas por tramo: cerca de 1000 (lo máximo de CCC por petición) pero sin llenar la página
     [Range(100, 1000)]
-    public int LlamadasObjetivoPorTramo { get; init; } = 800;
+    public int LlamadasObjetivoPorTramo { get; init; } = 900;
 
     // reintentos con el tramo a la mitad
     [Range(0, 6)]
@@ -48,6 +48,14 @@ public sealed class DescargaOptions
     // días máximos para cerrar hacia atrás
     [Range(1, 31)]
     public int DiasCierreAtras { get; init; } = 7;
+
+    // atraso a partir del cual el frente en vivo salta a la hora actual y lo de en medio se recupera aparte
+    [Range(15, 1440)]
+    public int UmbralSaltoMinutos { get; init; } = 60;
+
+    // el repaso vuelve a pedir lo que se bajó a menos de estos minutos de su hora (lo de después ya estaba completo)
+    [Range(30, 1440)]
+    public int VentanaRepasoMinutos { get; init; } = 120;
 
     // atraso para mandar correo
     [Range(5, 1440)]
