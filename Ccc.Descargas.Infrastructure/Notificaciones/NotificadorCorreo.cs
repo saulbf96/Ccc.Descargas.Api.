@@ -30,6 +30,9 @@ public sealed class CorreoOptions
     public string De { get; init; } = string.Empty;
 
     public string[] Para { get; init; } = [];
+
+    // van en copia
+    public string[] Copia { get; init; } = [];
 }
 
 // descifra la contraseña del correo
@@ -93,6 +96,10 @@ internal sealed class NotificadorCorreo(IOptions<CorreoOptions> options, ILogger
         {
             mensaje.To.Add(MailboxAddress.Parse(para));
         }
+        foreach (var copia in correo.Copia)
+        {
+            mensaje.Cc.Add(MailboxAddress.Parse(copia));
+        }
         mensaje.Subject = $"[CCC Descargas] {asunto}";
         mensaje.Body = new TextPart("plain") { Text = cuerpo };
 
@@ -112,3 +119,6 @@ internal sealed class NotificadorCorreo(IOptions<CorreoOptions> options, ILogger
         await smtp.DisconnectAsync(true, cancellationToken);
     }
 }
+
+
+

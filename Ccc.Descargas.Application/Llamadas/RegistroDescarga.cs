@@ -56,11 +56,20 @@ public sealed record RegistroTramo(
 
     // ms guardando en la BD
     public long? MsBd { get; init; }
+
+    // tramo de recuperación: fin del hueco que avanza (en lugar del marcador)
+    public DateTime? FinHueco { get; init; }
 }
 
 // marcador de avance
 public sealed record AvanceDescarga(
     DateTime DescargadoHasta, int? TamanoTramoSegundos, int ErroresSeguidos, string? UltimoError, DateTime? FechaUltimoError);
+
+// rango de llamadas por recuperar: [Desde, Hasta)
+public sealed record HuecoDescarga(DateTime Desde, DateTime Hasta, int? TamanoTramoSegundos);
+
+// rango continuo de tramos, Hasta incluido
+public sealed record RangoTramos(DateTime Desde, DateTime Hasta);
 
 // resumen de bitácora para los correos
 public sealed record ResumenTipo(TipoDescarga Tipo, int TramosOk, int TramosError, long Registros, DateTime? UltimoFin, string? UltimoError);

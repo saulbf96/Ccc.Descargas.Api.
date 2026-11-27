@@ -30,7 +30,47 @@ internal sealed class BitacoraDescargasRepository(IOptions<BaseDatosOptions> opt
             p.Add("@Mensaje", SqlDbType.NVarChar, 1000).Value = Nulo(r.Mensaje);
             p.Add("@Servidor", SqlDbType.NVarChar, 100).Value = Environment.MachineName;
             p.Add("@MoverAvance", SqlDbType.Bit).Value = moverAvance;
+            p.Add("@FinHueco", SqlDbType.DateTime2).Value = Nulo(r.FinHueco);
         }, async (lector, ct) => await lector.ReadAsync(ct), cancellationToken);
+
+    public Task<bool> SaltarAsync(string clientId, DateTime desde, DateTime hasta, int? tamanoTramoSegundos,
+        CancellationToken cancellationToken) =>
+        EjecutarAsync(options.Value, Tabla(clientId), Saltar, p =>
+        {
+            p.Add("@Desde", SqlDbType.DateTime2).Value = desde;
+            p.Add("@Hasta", SqlDbType.DateTime2).Value = hasta;
+            p.Add("@TamanoTramoSegundos", SqlDbType.Int).Value = Nulo(tamanoTramoSegundos);
+        }, async (lector, ct) => await lector.ReadAsync(ct) && lector.GetInt32(0) == 1, cancellationToken);
+
+    public Task<IReadOnlyList<HuecoDescarga>> ObtenerHuecosAsync(string clientId, CancellationToken cancellationToken) =>
+        EjecutarAsync<IReadOnlyList<HuecoDescarga>>(options.Value, Tabla(clientId), ConsultarHuecos, _ => { }, async (lector, ct) =>
+        {
+            var huecos = new List<HuecoDescarga>();
+            while (await lector.ReadAsync(ct))
+            {
+                huecos.Add(new HuecoDescarga(lector.GetDateTime(0), lector.GetDateTime(1), lector.IsDBNull(2) ? null : lector.GetInt32(2)));
+            }
+
+            return huecos;
+        }, cancellationToken);
+
+    public Task<IReadOnlyList<RangoTramos>> ObtenerTramosEnVivoAsync(string clientId, DateTime desde, DateTime hasta, int ventanaMinutos,
+        CancellationToken cancellationToken) =>
+        EjecutarAsync<IReadOnlyList<RangoTramos>>(options.Value, Tabla(clientId), TramosEnVivo, p =>
+        {
+            p.Add("@Desde", SqlDbType.DateTime2).Value = desde;
+            p.Add("@Hasta", SqlDbType.DateTime2).Value = hasta;
+            p.Add("@VentanaMinutos", SqlDbType.Int).Value = ventanaMinutos;
+        }, async (lector, ct) =>
+        {
+            var rangos = new List<RangoTramos>();
+            while (await lector.ReadAsync(ct))
+            {
+                rangos.Add(new RangoTramos(lector.GetDateTime(0), lector.GetDateTime(1)));
+            }
+
+            return rangos;
+        }, cancellationToken);
 
     public Task<AvanceDescarga?> ObtenerAvanceAsync(string clientId, TipoDescarga tipo, CancellationToken cancellationToken) =>
         EjecutarAsync(options.Value, Tabla(clientId), ConsultarAvance,

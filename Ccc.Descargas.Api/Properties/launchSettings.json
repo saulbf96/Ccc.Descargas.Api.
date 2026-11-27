@@ -44,8 +44,8 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DescargaAutomatica__Habilitada": "true",
-        "Correo__Habilitado": "false",
-        "ResumenDiario__Habilitado": "false"
+        "Correo__Habilitado": "true",
+        "ResumenDiario__Habilitado": "true"
       }
     }
   }

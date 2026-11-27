@@ -13,6 +13,9 @@ internal static class ProcedimientoCuenta
     public const byte RegistrarBitacora = 4;
     public const byte ConsultarAvance = 5;
     public const byte Resumen = 6;
+    public const byte Saltar = 7;
+    public const byte ConsultarHuecos = 8;
+    public const byte TramosEnVivo = 9;
 
     public static TablaCuenta Tabla(string clientId) =>
         int.TryParse(clientId, out var id) && TablasCuenta.PorCuenta.TryGetValue(id, out var tabla)

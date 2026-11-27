@@ -56,4 +56,30 @@ public class ResumenDescargasTests
         Assert.True(correo.HayProblemas);
         Assert.Contains("todavía sin descargas registradas", correo.Cuerpo);
     }
+
+    [Fact]
+    public void Con_huecos_dice_cuanto_falta_por_recuperar()
+    {
+        var huecos = new Dictionary<string, IReadOnlyList<HuecoDescarga>>
+        {
+            ["2812"] = [new(Ahora.AddHours(-30), Ahora.AddHours(-26), null), new(Ahora.AddHours(-5), Ahora.AddHours(-4), null)],
+        };
+        var correo = ResumenDescargas.Armar("Inicio", [(Datos.Consu, Resumen(Limite))], Ahora.Date, Ahora, Ahora, Limite,
+            TimeSpan.FromMinutes(60), "SERVIDOR", huecos);
+
+        Assert.Contains("1 cuenta(s) recuperando", correo.Asunto);
+        Assert.Contains("por recuperar 5h 00m en 2 hueco(s)", correo.Cuerpo);
+        Assert.Contains("el más viejo desde el 09/11 01:00", correo.Cuerpo);
+    }
+
+    [Fact]
+    public void Sin_huecos_dice_todas_al_dia()
+    {
+        var correo = ResumenDescargas.Armar("Inicio", [(Datos.Consu, Resumen(Limite))], Ahora.Date, Ahora, Ahora, Limite,
+            TimeSpan.FromMinutes(60), "SERVIDOR", new Dictionary<string, IReadOnlyList<HuecoDescarga>>());
+
+        Assert.StartsWith("[OK]", correo.Asunto);
+        Assert.EndsWith("todas al día", correo.Asunto);
+        Assert.Contains("todas las cuentas al día", correo.Cuerpo);
+    }
 }

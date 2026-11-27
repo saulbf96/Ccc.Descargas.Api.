@@ -23,7 +23,7 @@ public sealed class ResumenDiarioOptions
 }
 
 internal sealed class ResumenDiarioWorker(
-    IServiceScopeFactory scopeFactory,
+    EstadoDescargas estado,
     IOptions<ResumenDiarioOptions> options,
     IOptions<DescargaOptions> descarga,
     INotificador notificador,
@@ -57,19 +57,7 @@ internal sealed class ResumenDiarioWorker(
 
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var cuentas = scope.ServiceProvider.GetRequiredService<ICuentaCccRepository>().ObtenerTodas();
-            var bitacora = scope.ServiceProvider.GetRequiredService<IBitacoraDescargas>();
-
-            var resumenes = new List<(CuentaCcc, ResumenCuenta)>();
-            foreach (var cuenta in cuentas)
-            {
-                resumenes.Add((cuenta, await bitacora.ObtenerResumenAsync(cuenta.ClientId, desde, hasta, cancellationToken)));
-            }
-
-            var o = descarga.Value;
-            var correo = ResumenDescargas.Armar(titulo, resumenes, desde, hasta, ahora, ahora.AddMinutes(-o.MargenMinutos),
-                TimeSpan.FromMinutes(o.MinutosAtrasoAlerta), Environment.MachineName);
+            var correo = await estado.ArmarAsync(titulo, desde, hasta, cancellationToken);
             await notificador.EnviarAsync(correo.Asunto, correo.Cuerpo, cancellationToken);
             logger.LogInformation("Correo de {Tipo} del día enviado: {Asunto}", esInicio ? "inicio" : "fin", correo.Asunto);
         }
